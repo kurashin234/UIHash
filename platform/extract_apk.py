@@ -2,10 +2,10 @@
 
 import os
 
-from androguard.core.bytecodes.apk import APK
+from androguard.core.apk import APK
 from os.path import basename, exists, join
 
-from androguard.core.bytecodes.axml import AXMLPrinter
+from androguard.core.axml import AXMLPrinter
 
 from util.util_platform import init_path, get_logger
 from os import mkdir, makedirs

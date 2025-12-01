@@ -67,6 +67,14 @@ class Device:
 
         """
         try:
+            # Check if already connected
+            devices_output = str(check_output(["adb", "devices"]))
+            if device_ip in devices_output:
+                self.logger.get_logger.info(f"{device_ip} is already connected/attached")
+                self.connected = True
+                self.device_serial = device_ip
+                return 0
+
             self.logger.get_logger.info(f"connect to {device_ip} via adb...")
             check_call(["adb", "connect", device_ip])
             devices: str = str(check_output(["adb", "devices"]))
@@ -76,6 +84,13 @@ class Device:
             return 0
         except CalledProcessError as e:
             self.logger.get_logger.error(f"cmd {e.cmd} failed: {e.output}")
+            # Check if it is already connected despite the error (e.g. emulator serial)
+            devices_output = str(check_output(["adb", "devices"]))
+            if device_ip in devices_output:
+                 self.logger.get_logger.info(f"{device_ip} is visible in adb devices, proceeding.")
+                 self.connected = True
+                 self.device_serial = device_ip
+                 return 0
             return e.returncode
 
     def init_minicap(self):
@@ -86,28 +101,42 @@ class Device:
         root_path = os.path.abspath(os.path.dirname(airtest.__file__))
         abi = self.get_abi()
         android_version = self.get_sdk_version()
-        stf_libs = "\\airtest\\core\\android\\static\\stf_libs"
-        so_path = f"\\minicap-shared\\aosp\\libs\\android-{android_version}\\{abi}\\minicap.so"
-        airtest_minicap_path = os.path.abspath(os.path.dirname(root_path)) + stf_libs
-        airtest_minicapso_path = os.path.abspath(os.path.dirname(root_path)) + stf_libs + so_path
-        if not os.path.exists(airtest_minicap_path) or \
+        
+        # Correct path based on inspection: airtest/core/android/static/stf_libs/<abi>/minicap.so
+        airtest_minicap_path = os.path.join(root_path, "core", "android", "static", "stf_libs")
+        airtest_minicapso_path = os.path.join(airtest_minicap_path, abi, "minicap.so")
+        
+        # Fallback or check for minicap binary as well?
+        # The original code looked for 'minicap' binary in one place and 'minicap.so' in another.
+        # Let's assume the binary is also in the abi folder for now or check.
+        airtest_minicap_bin_path = os.path.join(airtest_minicap_path, abi, "minicap")
+
+        self.logger.get_logger.info(f"minicap bin path: {airtest_minicap_bin_path}")
+        self.logger.get_logger.info(f"minicap so path: {airtest_minicapso_path}")
+        
+        if not os.path.exists(airtest_minicap_bin_path) or \
                 not os.path.exists(airtest_minicapso_path):
+            self.logger.get_logger.error(f"minicap bin not found: {airtest_minicap_bin_path}")
+            self.logger.get_logger.error(f"minicap so not found: {airtest_minicapso_path}")
             raise FileNotFoundError("please check your airtest install")
 
-        dst = "/data/local/tmp/"
-        opt = self.run_shell(f"ls /data/local/tmp/minicap", get_output=True)
-        if "no such" in opt.lower():
-            # push minicap bin and library
-            self.logger.get_logger.info("push minicap")
-            self.push(f"{airtest_minicap_path}/{abi}/minicap", dst)
+        try:
+            dst = "/data/local/tmp/"
+            opt = self.run_shell(f"ls /data/local/tmp/minicap", get_output=True)
+            if "no such" in opt.lower():
+                # push minicap bin and library
+                self.logger.get_logger.info("push minicap")
+                self.push(f"{airtest_minicap_path}/{abi}/minicap", dst)
 
-        opt = self.run_shell(f"ls /data/local/tmp/minicap.so", get_output=True)
-        if "no such" in opt.lower():
-            self.push(airtest_minicapso_path, dst)
+            opt = self.run_shell(f"ls /data/local/tmp/minicap.so", get_output=True)
+            if "no such" in opt.lower():
+                self.push(airtest_minicapso_path, dst)
 
-        # chmod to make minicap executable
-        self.run_shell(f"chmod 777 {dst}*")
-        self.logger.get_logger.info("minicap files are ready")
+            # chmod to make minicap executable
+            self.run_shell(f"chmod 777 {dst}*")
+            self.logger.get_logger.info("minicap files are ready")
+        except Exception as e:
+            self.logger.get_logger.warning(f"Failed to initialize minicap: {e}. Will fallback to screencap.")
 
     def start_minicap(self, minicap="/data/local/tmp/"):
         """Start Minicap"""
@@ -193,18 +222,20 @@ class Device:
               if required
             minicap (str): Remote path for Minicap
         """
+        # Try using minicap first
         display_info = self.get_display_info()
-        width = display_info["width"]
-        height = display_info["height"]
-        orientation = int(display_info["orientation"]) * 90
-        if orientation == 90:
-            width, height = height, width
-        self.logger.get_logger.debug(f"{width}x{height}@"
-                                     f"{width}x{height}/{orientation}")
-        self.run_shell(f"LD_LIBRARY_PATH={minicap} {minicap}minicap "
-                       f"-P {width}x{height}@{width}x{height}/{orientation} "
-                       f"-s > /sdcard/screencap.png")
+        width, height = display_info["width"], display_info["height"]
+        cmd = f"LD_LIBRARY_PATH={minicap} {minicap}minicap -P {width}x{height}@{width}x{height}/0 -s > /sdcard/screencap.png"
+        self.run_shell(cmd)
+        
+        # Check if file exists and pull
+        check = self.run_shell("ls /sdcard/screencap.png", get_output=True)
+        if "no such" in check.lower():
+            self.logger.get_logger.warning("Minicap failed (no output file), falling back to screencap")
+            return self.take_screenshot_screencap(output_file)
+            
         self.pull("/sdcard/screencap.png", output_file)
+        self.run_shell("rm /sdcard/screencap.png")
 
     def get_current(self) -> Tuple[str, str]:
         """Get current package and activity"""
@@ -311,7 +342,8 @@ class Device:
         self.logger.get_logger.info("all the 3rd packages are uninstalled")
 
     def start_activity(self, package_name: str,
-                       activity: str, timeout: int = 0.8) -> Union[str, None]:
+                       activity: str, timeout: int = 10,
+                       force_stop: bool = True) -> Union[str, None]:
         """Try to launch an app with certain activity
 
         Args:
@@ -321,6 +353,7 @@ class Device:
               then try to start the package from its default (main) activity.
               We use monkey to access the main activity
             timeout (float): A delay to wait for the activity
+            force_stop (bool): Whether to force stop the app before starting (-S flag)
 
         Returns:
             None if fail, an activity name if success
@@ -332,6 +365,8 @@ class Device:
             name = "/".join(name.split("/")[-2:])
         if len(activity) > 0:
             cmd = f"am start -n {name}"
+            if force_stop:
+                cmd = f"am start -S -n {name}"
             self.run_shell(cmd)
         else:
             self.run_shell(f"monkey -p {package_name} -c "
@@ -394,10 +429,10 @@ class Device:
             A dict with three keys: orientation, width, and height
         """
         display_re = re.compile(
-            r'.*DisplayViewport{valid=true, '
+            r'.*DisplayViewport\{.*valid=true, '
             r'.*orientation=(?P<orientation>\d+), '
             r'.*deviceWidth=(?P<width>\d+), '
-            r'deviceHeight=(?P<height>\d+).*'
+            r'.*deviceHeight=(?P<height>\d+).*'
         )
         output = self.run_shell("dumpsys display", get_output=True).splitlines()
         for line in output:
@@ -413,7 +448,8 @@ class Device:
         """Pull a file from the device to localhost"""
         try:
             check_call(["adb", "-s", self.device_serial, "pull", src, dst])
-        except CalledProcessError:
+        except CalledProcessError as e:
+            self.logger.get_logger.error(f"pull failed: {src} -> {dst}, error: {e}")
             return
 
     def push(self, src: str, dst: str):
@@ -446,12 +482,16 @@ class Device:
         Args:
             dst (str): Output path of the hierarchy file
         """
-        xml_path = self.run_shell("uiautomator dump", get_output=True)
-        xml_path = xml_path.split(' ')[-1].strip()
-        if xml_path.endswith('.xml'):
-            xml_path = self.run_shell("uiautomator dump", get_output=True)
-            xml_path = xml_path.split(' ')[-1].strip()
+        output = self.run_shell("uiautomator dump", get_output=True)
+        # Output format: "UI hierchary dumped to: /sdcard/window_dump.xml"
+        # We want to extract the path.
+        match = re.search(r':\s*(\S+\.xml)', output)
+        if match:
+            xml_path = match.group(1)
+            self.logger.get_logger.debug(f"dumped to {xml_path}, pulling to {dst}")
             self.pull(xml_path, dst)
+        else:
+            self.logger.get_logger.error(f"uiautomator dump failed to return xml path. Output: {output}")
 
     def get_current_dom(self):
         """Get current hierarchy DOM
@@ -471,43 +511,36 @@ class Device:
         return dom
 
     def get_current_activity(self, retry=3) -> Union[dict, None]:
-        """Get current package, PID (process ID) and activity"""
+        """Get current package and activity using mCurrentFocus"""
         while retry > 0:
             ret = dict()
             try:
-                string = self.run_shell("dumpsys activity top", get_output=True)
+                # Use dumpsys window to get the actual focused window
+                string = self.run_shell("dumpsys window displays | grep mCurrentFocus", get_output=True)
             except UnicodeDecodeError:
-                self.logger.get_logger.error(
-                    "I meet decode error...retry")
-                self.escape_stuck()
-                retry -= 1
-                time.sleep(0.5)
-                continue
-            re_task = re.compile(r"TASK\s(?P<package>\S+)\s")
-            task = re_task.search(string)
-            if task:
-                ret["package"] = task.group("package")
-            else:
-                self.logger.get_logger.error("cannot get current package, retry...")
-                self.escape_stuck()
+                self.logger.get_logger.error("decode error...retry")
                 retry -= 1
                 time.sleep(0.5)
                 continue
 
-            re_activity = re.compile(r"ACTIVITY\s(?P<activity>\S+)"
-                                     r"\s\S+\spid=(?P<pid>\d+)")
-            activity = re_activity.search(string)
-            if activity:
-                ret["pid"] = activity.group("pid")
-                ret["activity"] = activity.group("activity")
+            # Regex to parse: mCurrentFocus=Window{<token> <user> <package>/<activity>}
+            # Example: mCurrentFocus=Window{c14061c u0 org.fdroid.fdroid/org.fdroid.fdroid.views.main.MainActivity}
+            # Note: activity might be short class name like .MainActivity
+            pattern = r"mCurrentFocus=Window\{.*\s(?P<package>[^\/]+)\/(?P<activity>[^\}]+)\}"
+            match = re.search(pattern, string)
+            
+            if match:
+                ret["package"] = match.group("package")
+                ret["activity"] = match.group("activity")
+                ret["pid"] = "0" # PID not available from this command, but not used
+                return ret
             else:
-                self.logger.get_logger.error("cannot get current activity, retry...")
-                self.escape_stuck()
+                # Fallback or retry
+                self.logger.get_logger.warning(f"cannot parse activity from: {string.strip()}")
                 retry -= 1
                 time.sleep(0.5)
                 continue
-
-            return ret
+        return None
 
     def escape_stuck(self):
         """In some cases, the Andoid OS may be freezed (e.g., by

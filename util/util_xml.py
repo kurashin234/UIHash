@@ -5,7 +5,7 @@ from typing import Tuple
 from xml.dom.minidom import Document, parseString, Element
 from zipfile import BadZipFile, ZipFile
 import re
-from androguard.core.bytecodes.axml import AXMLPrinter
+from androguard.core.axml import AXMLPrinter
 
 
 def dump_activity_from_apk(apk_path: str):

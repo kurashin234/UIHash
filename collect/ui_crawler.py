@@ -284,6 +284,9 @@ class UICrawler:
                            handled_activity, opt_path, True)
         if k == 0:  # success
             handled_activity.add(activity)
+        else:
+            self._logger.get_logger.warning(f"Failed to capture initial UI for {package_name}. Aborting exploration.")
+            return handled_activity
 
         # get all interactive controls
         controls = list()
@@ -299,7 +302,8 @@ class UICrawler:
                 read_all_nodes(controls, self.dom)
                 controls = [self.get_dict(i) for i in controls]
                 controls = [i for i in controls if len(i) > 0]
-                time.sleep(0.5)
+                self._logger.get_logger.info(f"Found {len(controls)} interactive controls on main activity.")
+                time.sleep(10)
 
         # main activity
         main_activity = self.device.get_current_activity()["activity"]
@@ -309,13 +313,14 @@ class UICrawler:
             try:
                 self._logger.get_logger.debug(f"starting: {main_activity}")
                 # here, the activity name already contains the package name
-                activity = self.device.start_activity(package_name, main_activity)
+                activity = self.device.start_activity(package_name, main_activity, force_stop=False)
                 self._logger.get_logger.info(f"current activity: {activity}")
                 center = (c['c1'], c['c2'])
                 self._logger.get_logger.info(f"now click: {c['name']}, "
                                              f"center: {center}, text: {c['text']}")
                 self.device.click(*center)
-                time.sleep(0.8)
+                self.device.click(*center)
+                time.sleep(10)
                 k = self.handle_ui(package_name, "UNKNOWN",
                                    0, handled_activity, opt_path)
                 if k == 0:  # success
@@ -383,6 +388,10 @@ class UICrawler:
         # start the app
         if activity != "UNKNOWN":
             current_activity = self.device.start_activity(package_name, activity)
+            # Wait for the app to fully load
+            sleep(5)
+            # Re-check current activity in case it crashed or changed
+            current_activity = self.device.get_current_activity()["activity"]
         else:
             self._logger.get_logger.info(f"get current activity")
             current_activity = self.device.get_current()[1]
@@ -397,13 +406,15 @@ class UICrawler:
             k += 1
             return k
 
-        if current_activity in handled_activity:
-            self._logger.get_logger.info(
-                "already seen this activity, skip.")
-            return k
+        # if current_activity in handled_activity:
+        #     self._logger.get_logger.info(
+        #         "already seen this activity, skip.")
+        #     return k
 
-        xml_path = os.path.join(opt_path, f"{current_activity}.xml")
+        timestamp = int(time.time())
+        xml_path = os.path.join(opt_path, f"{current_activity}_{timestamp}.xml")
         xml_path = xml_path.replace('/', '-')
+        print(f"DEBUG: xml_path={xml_path}")
         self.device.dump_hierarchy(xml_path)
         if not os.path.exists(xml_path):
             k += 1
@@ -412,26 +423,65 @@ class UICrawler:
             xml = xmlf.read()
         if "package=\"android\"" in xml:
             self.device.press_key(66)  # press enter
-            sleep(0.5)
+            sleep(10)
             self.device.press_key(66)
-            sleep(0.5)
+            sleep(10)
             self.device.press_key(66)
             self.device.press_key(4)
             self.device.press_key(4)
 
         has_content, dom = remove_sysnode(xml)
+        
+        # Validate if the XML belongs to the target package
+        # If it's the launcher, retry dumping
+        retry_dump = 0
+        while retry_dump < 3:
+            is_launcher = False
+            is_target = False
+            if dom.getElementsByTagName('hierarchy'):
+                root = dom.getElementsByTagName('hierarchy')[0]
+                # Simple check: does the XML contain the package name?
+                # We can check all nodes, but checking the string content is faster/easier for now
+                if package_name in xml:
+                    is_target = True
+                elif "com.google.android.apps.nexuslauncher" in xml:
+                    is_launcher = True
+            
+            if is_target:
+                break
+            
+            if is_launcher:
+                self._logger.get_logger.warning(f"\t[!] Captured launcher instead of {package_name}. Retrying dump ({retry_dump+1}/3)...")
+                sleep(2) # Wait a bit before retrying
+                self.device.dump_hierarchy(xml_path)
+                if os.path.exists(xml_path):
+                    with open(xml_path, mode='r', encoding='utf-8') as xmlf:
+                        xml = xmlf.read()
+                    has_content, dom = remove_sysnode(xml)
+                retry_dump += 1
+            else:
+                # If it's neither target nor launcher (maybe system UI or empty), break and let remove_sysnode handle it
+                break
+
         if not has_content:
             self._logger.get_logger.info(
                 '\t[-] without app content, continue')
             os.remove(xml_path)
             k += 1
             return k
+        
+        # Final check: if we still have launcher after retries, skip saving
+        if "com.google.android.apps.nexuslauncher" in xml and package_name not in xml:
+             self._logger.get_logger.warning(f"\t[!] Skipping save: Still capturing launcher after retries.")
+             os.remove(xml_path)
+             k += 1
+             return k
 
         k = 0  # reset k
         self._logger.get_logger.info('\t[*] taking screenshot...')
         try:
             current_activity = current_activity.replace('/', '-')
-            image_path = os.path.join(opt_path, f"{current_activity}.jpg")
+            image_path = os.path.join(opt_path, f"{current_activity}_{timestamp}.jpg")
             self.device.take_screenshot_minicap(image_path)
             with open(xml_path, 'w+', encoding='utf-8') as f:
                 dom.writexml(f, addindent='  ', newl='\n')
@@ -480,7 +530,7 @@ def parse_arg_crawler(input_args: list):
 if __name__ == '__main__':
     from subprocess import getoutput, call
 
-    subprocess.run("taskkill /f /t /im adb")
+    # subprocess.run("taskkill /f /t /im adb")
     args = parse_arg_crawler(sys.argv[1:])
     u = UICrawler(args)
     last_index = u.dump_apks(args.package_name)
@@ -489,13 +539,13 @@ if __name__ == '__main__':
         args.start = last_index
         # sample code for launch memuc
         # in case of other types of devices, just change the cmd
-        index = args.ip[-2]
-        o = getoutput(f'memuc isvmrunning -i {index}')
-        if not o.lower() == "running":
-            print('-------restart-------')
-            call(['memuc', 'stop', '-i', index])
-            s2 = call(['memuc', 'start', '-i', index])
-            if s2 == 0:
-                print('done!')
-                sleep(10)
+        # index = args.ip[-2]
+        # o = getoutput(f'memuc isvmrunning -i {index}')
+        # if not o.lower() == "running":
+        #     print('-------restart-------')
+        #     call(['memuc', 'stop', '-i', index])
+        #     s2 = call(['memuc', 'start', '-i', index])
+        #     if s2 == 0:
+        #         print('done!')
+        #         sleep(100)
         last_index = UICrawler(args).dump_apks(args.package_name)

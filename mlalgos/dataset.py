@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 from zipfile import BadZipFile, ZipFile
 from os import walk
 from xml.dom.minidom import parseString
-from androguard.core.bytecodes.axml import AXMLPrinter
+from androguard.core.axml import AXMLPrinter
 import torch
 import sys
 import argparse

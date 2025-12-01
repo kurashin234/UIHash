@@ -1,0 +1,17 @@
+numpy<2.0
+matplotlib
+pandas
+torch
+bokeh
+umap-learn
+
+torchvision
+progressbar2
+Pillow
+seaborn
+scipy
+scikit-learn
+androguard
+airtest
+selenium
+webdriver-manager

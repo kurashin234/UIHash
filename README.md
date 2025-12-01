@@ -1,23 +1,23 @@
 UIHash
 ====================================================
 
-Detecting similar user interfaces (UIs) in Android apps by a grid-based representation.
+グリッドベースの表現によるAndroidアプリの類似ユーザーインターフェース(UI)の検出。
 
-Cite
+引用
 ----
 > Jiawei Li, Jian Mao, Jun Zeng, Qixiao Lin, Shaowen Feng, and Zhenkai Liang. UIHash: Detecting Similar Android UIs through Grid-Based Visual Appearance Representation. In USENIX Security Symposium, 2024.
 
-New: Alternative Version
+新着: 代替バージョン
 -------------------
-We also propose [UIHash-Serve](https://github.com/DaweiX/UIHash-Serve), another UIHash version that works better on headless servers.
-It uses QEMU for dynamic app testing and [Faiss](https://github.com/facebookresearch/faiss) for similarity searching. Feel free to try it!
+ヘッドレスサーバーでより良く動作する別のUIHashバージョンである [UIHash-Serve](https://github.com/DaweiX/UIHash-Serve) も提案しています。
+動的アプリテストにQEMUを使用し、類似性検索に [Faiss](https://github.com/facebookresearch/faiss) を使用しています。ぜひお試しください！
 
-Requirements
+必要要件
 ------------
 
-We develop UIHash on Python3.7 and test it on Python3.7.4 and Python3.7.9.
+UIHashはPython3.7で開発され、Python3.7.4およびPython3.7.9でテストされています。
 
-The important required packages for our implementation are:
+実装に必要な重要なパッケージは以下の通りです：
 
 * numpy~=1.19.3
 * matplotlib~=3.5.1
@@ -34,76 +34,76 @@ The important required packages for our implementation are:
 * sklearn~=0.0
 * scikit-learn~=1.0.2
 
-We recommend installing PyTorch (torch) with GPU support when CUDA is available. It works for CPUs as well. In the case of Intel CPU, the detection framework will work much faster if MKL (Math Kernel Library) works with PyTorch.
+CUDAが利用可能な場合は、GPUサポート付きのPyTorch (torch) をインストールすることをお勧めします。CPUでも動作します。Intel CPUの場合、MKL (Math Kernel Library) がPyTorchと連携していれば、検出フレームワークははるかに高速に動作します。
 
-The following packages are used to collect UIs and other app features:
+UIやその他のアプリ機能を収集するために、以下のパッケージが使用されます：
 
 * androguard~=3.4.0a1
 * airtest~=1.2.4
 
-We use ADB (1.0.41, Version 31.0.3-7562133) to communicate with Android devices.
+Androidデバイスとの通信にはADB (1.0.41, Version 31.0.3-7562133) を使用します。
 
-Datasets
+データセット
 --------
 
-We list the public datasets used in the paper as follows:
+論文で使用されている公開データセットは以下の通りです：
 
-- RePack dataset: RePack (https://github.com/serval-snt-uni-lu/RePack) is an Android repackaged app dataset collected from AndroZoo (https://androzoo.uni.lu/). Its ground truth listed over 15,000 app pairs. We use the dataset to evaluate the effectiveness of UIHash.
+- RePackデータセット: RePack (https://github.com/serval-snt-uni-lu/RePack) は、AndroZoo (https://androzoo.uni.lu/) から収集されたAndroidのリパッケージアプリデータセットです。そのグランドトゥルースには15,000以上のアプリペアがリストされています。このデータセットはUIHashの有効性を評価するために使用されます。
 
-- Malware dataset: RmvDroid (https://ieeexplore.ieee.org/document/8816783) is an Android malware dataset, containing 9,133 samples that belong to 56 malware families with high confidence. The apps are collected by analyzing Google Play snapshots across different years. Since there is no UI ground truth for this dataset, we take the dataset to evaluate UIHash's capacity of discovering similar UI clusters.  
+- マルウェアデータセット: RmvDroid (https://ieeexplore.ieee.org/document/8816783) はAndroidマルウェアデータセットで、高い信頼度で56のマルウェアファミリーに属する9,133のサンプルを含んでいます。アプリは異なる年のGoogle Playスナップショットを分析して収集されました。このデータセットにはUIのグランドトゥルースがないため、UIHashが類似したUIクラスターを発見する能力を評価するために使用します。
 
-- Rico dataset: Rico (http://interactionmining.org/rico) is an Android UI dataset with over 72K unique UIs. We use the dataset in our implementation to improve the effectiveness of the CNN model for view image reidentification.
+- Ricoデータセット: Rico (http://interactionmining.org/rico) は、72,000以上のユニークなUIを持つAndroid UIデータセットです。実装では、ビュー画像の再識別を行うCNNモデルの有効性を向上させるためにこのデータセットを使用します。
 
-Project Structure
+プロジェクト構成
 --------------------
 ```
 [uihash]
-│    README.md                     This file
+│    README.md                     このファイル
 │
-├----collect                       * Collect UI dynamically
-│       device.py                       Android device object
-|       manual_capture.py               A test script for UI capture
-│       ui_crawler.py                   Traverse UIs
+├----collect                       * 動的にUIを収集
+│       device.py                       Androidデバイスオブジェクト
+│       manual_capture.py               UIキャプチャ用のテストスクリプト
+│       ui_crawler.py                   UIを走査
 │
-├----hasher                        * Generate UI#
-│       extract_view_images.py          Extract view images from UIs
-│       reclass.py                      Use a CNN model to reidentify views
-│       xml2nodes.py                    Extract visible controls from hierarchy XML
-│       nodes2hash.py                   Given visible controls, generate UI#
-│       uihash.py                       Generate UI# for an app dataset
+├----hasher                        * UI#を生成
+│       extract_view_images.py          UIからビュー画像を抽出
+│       reclass.py                      CNNモデルを使用してビューを再識別
+│       xml2nodes.py                    階層XMLから可視コントロールを抽出
+│       nodes2hash.py                   可視コントロールからUI#を生成
+│       uihash.py                       アプリデータセットのUI#を生成
 │
-├----mlalgos                       * Learning-based similarity analysis
-│       dataset.py                      Generate input dataset for machine learning
-│       network.py                      Neural networks implementation
-│       siamese.py                      Calculate similarity score via a Siamese network
-│       hca.py                          Clustering analysis
+├----mlalgos                       * 学習ベースの類似性分析
+│       dataset.py                      機械学習用の入力データセットを生成
+│       network.py                      ニューラルネットワークの実装
+│       siamese.py                      シャムネットワークによる類似度スコアの計算
+│       hca.py                          クラスタリング分析
 │
-├----platform                      *  Extract various app features
-│       apkparser.py                    The main program
-│       decompile.py                    Decompile an app for code-level inspection
-│       extract_apk.py                  Analyse an app and extract its features
+├----platform                      *  様々なアプリ機能を抽出
+│       apkparser.py                    メインプログラム
+│       decompile.py                    コードレベルの検査のためにアプリをデコンパイル
+│       extract_apk.py                  アプリを分析して機能を抽出
 │
-└----util                          * Helper functions
-        util_draw.py                    Draw plots
-        util_file.py                    Deal with files or folders
-        util_log.py                     Logger
-        util_math.py                    Multiple calculations
-        util_platform.py                Helper functions used for the platform
-        util_xml.py                     Read, parse and process XML documents
+└----util                          * ヘルパー関数
+        util_draw.py                    プロットの描画
+        util_file.py                    ファイルやフォルダの処理
+        util_log.py                     ロガー
+        util_math.py                    各種計算
+        util_platform.py                プラットフォームで使用されるヘルパー関数
+        util_xml.py                     XMLドキュメントの読み込み、解析、処理
 ```
 
-Usage
+使用方法
 --------
 
-To demonstrate the reproducibility of the best performance reported in our paper and facilitate researchers to track whether the model status is consistent with ours, we provide the best parameter settings in the codes and provide the log for our training at the bottom of this document. We provide detailed end-to-end (i.e., Android apk files to results) guidance as follows:
+論文で報告された最高性能の再現性を実証し、研究者がモデルの状態が我々のものと一致しているか追跡しやすくするために、コード内で最適なパラメータ設定を提供し、このドキュメントの最後にトレーニングのログを提供しています。以下に、詳細なエンドツーエンド（つまり、Android apkファイルから結果まで）のガイダンスを示します。
 
-### (0) Collect UIs
+### (0) UIの収集
 
-Run the following command to collect UI from apk files dynamically:
+以下のコマンドを実行して、apkファイルから動的にUIを収集します：
 
 ``python ./collect/ui_crawler.py path/to/apks device_ip``
 
-The detailed usage of the script is:
+スクリプトの詳細な使用方法は以下の通りです：
 
 ```text
     usage: ui_crawler.py [-h] [--start START] [--end END] [--resume] [--overwrite]
@@ -131,16 +131,16 @@ The detailed usage of the script is:
                             logging level, default: info
 ```
 
-### (1) Extract Views from UIs 
+### (1) UIからビューを抽出
 
-The first step to generating UI# is to extract view images from UI to re-identify them based on their appearances, instead of their declared names in the hierarchy or layout file. A command example to extract views is
+UI#を生成する最初のステップは、階層やレイアウトファイル内の宣言された名前ではなく、外観に基づいて再識別するために、UIからビュー画像を抽出することです。ビューを抽出するコマンド例は以下の通りです：
 
 
 ```bash
     python ./hasher/extract_view_images.py path/to/ui/collecting/output
 ```
 
-Show help by running ``python extract_view_images.py -h``:
+``python extract_view_images.py -h`` を実行してヘルプを表示します：
 
 ```text
 
@@ -160,14 +160,14 @@ Show help by running ``python extract_view_images.py -h``:
     --skip, -s      skip the existing items
 ```
 
-### (2) Recognize Control Types 
+### (2) コントロールタイプの認識
 
-Reclass the view images. The model will be saved or loaded in a folder named ``models``. If it does not exist or exists but is required to be updated, then the module will train a new one. An example command is
+ビュー画像を再分類します。モデルは ``models`` という名前のフォルダに保存またはロードされます。存在しない場合、または存在しても更新が必要な場合は、モジュールは新しいモデルをトレーニングします。コマンド例は以下の通りです：
 
 ```bash
     python ./hasher/reclass.py path/to/view/image/dataset path/to/ui/collecting/output --notskip
 ```
-Show help by running ``python reclass.py -h``:
+``python reclass.py -h`` を実行してヘルプを表示します：
 
 ```text
     usage: reclass.py [-h] [--lr LR] [--decay DECAY] [--batch_size BATCH_SIZE]
@@ -198,7 +198,7 @@ Show help by running ``python reclass.py -h``:
     --notskip, -s         do not skip the reidentified items
 ```
 
-The default values for the input arguments are:
+入力引数のデフォルト値は以下の通りです：
 
 **name**    | **value** | **name** | **value**
 ------------| -----------| ---------| -----------
@@ -207,22 +207,22 @@ batch_size  | 128        | epoch    |  12
 threshold   | 0.95       | retrain  |  False
 ------------ ------------ ---------- -----------
 
-### (3) Generate UI#
+### (3) UI#の生成
 
-Given UI hierarchy and re-identified view type, run commands like
+UI階層と再識別されたビュータイプを指定して、以下のようなコマンドを実行します：
 
 ```bash
-    # for original apps
+    # オリジナルアプリの場合
     python ./hasher/uihash.py path/to/opt_original_apk/ path/to/view/image/dataset -d ori
-    # for repackaged apps
+    # リパッケージアプリの場合
     python ./hasher/uihash.py path/to/opt_repackage_apk/ path/to/view/image/dataset -d re
-    # for unlabeled apps
+    # ラベルなしアプリの場合
     python ./hasher/uihash.py path/to/opt_xxx_apk/
 ```
 
-to generate UI# for labeled or unlabeled app dataset. After the process exit, we have ``name_[dataset]_5x5x10.npy`` and ``hash_[dataset]_5x5x10.npy`` under the folder ``output/hash``. The field [dataset] might be one of "ori" (for original apps in a labeled dataset), "re" (for repackaged apps in a labeled dataset), or the name of an unlabeled dataset. The former file records the metadata like app names and activity names. The latter file holds the UI# matrices.
+これにより、ラベル付きまたはラベルなしのアプリデータセットのUI#を生成します。プロセス終了後、``output/hash`` フォルダの下に ``name_[dataset]_5x5x10.npy`` と ``hash_[dataset]_5x5x10.npy`` が生成されます。[dataset] フィールドは、"ori"（RePackのようなラベル付きデータセットのオリジナルアプリの場合）、"re"（ラベル付きデータセットのリパッケージアプリの場合）、またはラベルなしデータセットの名前のいずれかになります。前者のファイルはアプリ名やアクティビティ名などのメタデータを記録します。後者のファイルはUI#マトリックスを保持します。
 
-Show help by running ``python uihash.py -h``:
+``python uihash.py -h`` を実行してヘルプを表示します：
 
 ```text
     usage: uihash.py [-h] [--output_path OUTPUT_PATH] [--naivexml]
@@ -255,11 +255,11 @@ Show help by running ``python uihash.py -h``:
                             minimal accepted visible nodes in a UI
 ```
 
-The default value for ``grid_size`` is ``5,5``, and the default value for ``filter`` is 5. If not assign an ``output_path``, it will be ``<uihash_homepath>/output/hash``.
+``grid_size`` のデフォルト値は ``5,5`` で、``filter`` のデフォルト値は 5 です。``output_path`` を指定しない場合、``<uihash_homepath>/output/hash`` になります。
 
-### (4) Generate Dataset
+### (4) データセットの生成
 
-Run ``python ./mlalgos/dataset.py -h`` to show help as below:
+``python ./mlalgos/dataset.py -h`` を実行して以下のようにヘルプを表示します：
 
 ```text
     usage: dataset.py [-h] [--hash_size HASH_SIZE]
@@ -278,13 +278,13 @@ Run ``python ./mlalgos/dataset.py -h`` to show help as below:
                             shape of the input UI#
 ```
 
-The module outputs ``Re_5x5x10.npz``, ``ReDP_5x5x10.npy and`` ``ReSP_5x5x10.npy`` in ``output/dataset``, where ``SP`` represents for similar pairs, and ``DP`` indicates that UI# pairs in it are dissimilar. 
+このモジュールは ``output/dataset`` に ``Re_5x5x10.npz``、``ReDP_5x5x10.npy``、``ReSP_5x5x10.npy`` を出力します。ここで ``SP`` は類似ペア（Similar Pairs）を表し、``DP`` はその中のUI#ペアが非類似（Dissimilar）であることを示します。
 
-For unlabeled dataset generation, please use the class `WildDataSet` instead.
+ラベルなしデータセットの生成については、代わりに `WildDataSet` クラスを使用してください。
 
-### (5) Get Results
+### (5) 結果の取得
 
-Run detection based on a siamese network. Similar to the model for reidentify views, the siamese model will also be saved or loaded in a folder named ``models``. If it does not exist or exists but is required to be updated, then ``siamese.py`` will train a new one.
+シャムネットワーク（Siamese Network）に基づいて検出を実行します。ビュー再識別モデルと同様に、シャムモデルも ``models`` という名前のフォルダに保存またはロードされます。存在しない場合、または存在しても更新が必要な場合は、``siamese.py`` が新しいモデルをトレーニングします。
 
 ```bash
     python ./mlalgos/siamese.py -R -f
@@ -325,7 +325,7 @@ Run detection based on a siamese network. Similar to the model for reidentify vi
                             channel,tick_horizontal,tick_vertical
 ```
 
-The default values for the input arguments are:
+入力引数のデフォルト値は以下の通りです：
 
 **name**    | **value** | **name** | **value**
 ------------| -----------| ---------| -----------
@@ -334,121 +334,19 @@ batch_size  | 32         | epoch    | 36
 threshold   | 0.6        | retrain  | False
 hash_size   | 10,5,5     | figure   | False
 
-The final output is the precision, recall, and F1 score on the test dataset. Use ``--figure`` to inspect the ROC curve.
+最終的な出力は、テストデータセットに対する適合率（Precision）、再現率（Recall）、F1スコアです。ROC曲線を確認するには ``--figure`` を使用してください。
 
-When implementing a brute large-scale pair-wise detecting, we select 20,000 as the batch size for a GPU with 2GB graphic memory. The value can be increased to a higher value, depending on your hardware.
+大規模なペアワイズ検出をブルートフォースで実装する場合、2GBのグラフィックメモリを持つGPUに対してバッチサイズとして20,000を選択します。この値はハードウェアに応じてより高い値に増やすことができます。
 
-Outputs for a single run:
+1回の実行の出力例：
 ```python
 DEVICE: cpu
 Training (1/36) 100% |========================================================|
 Validating (1/36) 100% |======================================================|
 Train Loss 0.195 Valid Loss 0.127 lr 0.001
-Training (2/36) 100% |========================================================|
-Validating (2/36) 100% |======================================================|
-Train Loss 0.108 Valid Loss 0.094 lr 0.001
-Training (3/36) 100% |========================================================|
-Validating (3/36) 100% |======================================================|
-Train Loss 0.087 Valid Loss 0.081 lr 0.001
-Training (4/36) 100% |========================================================|
-Validating (4/36) 100% |======================================================|
-Train Loss 0.073 Valid Loss 0.083 lr 0.001
-Training (5/36) 100% |========================================================|
-Validating (5/36) 100% |======================================================|
-Train Loss 0.066 Valid Loss 0.07 lr 0.001
-Training (6/36) 100% |========================================================|
-Validating (6/36) 100% |======================================================|
-Train Loss 0.06 Valid Loss 0.072 lr 0.001
-Training (7/36) 100% |========================================================|
-Validating (7/36) 100% |======================================================|
-Train Loss 0.054 Valid Loss 0.063 lr 0.001
-Training (8/36) 100% |========================================================|
-Validating (8/36) 100% |======================================================|
-Train Loss 0.05 Valid Loss 0.064 lr 0.001
-Training (9/36) 100% |========================================================|
-Validating (9/36) 100% |======================================================|
-Train Loss 0.045 Valid Loss 0.066 lr 0.001
-Training (10/36) 100% |=======================================================|
-Validating (10/36) 100% |=====================================================|
-Train Loss 0.042 Valid Loss 0.065 lr 0.001
-Training (11/36) 100% |=======================================================|
-Validating (11/36) 100% |=====================================================|
-Train Loss 0.039 Valid Loss 0.064 lr 0.0001
-Training (12/36) 100% |=======================================================|
-Validating (12/36) 100% |=====================================================|
-Train Loss 0.034 Valid Loss 0.06 lr 0.0001
-Training (13/36) 100% |=======================================================|
-Validating (13/36) 100% |=====================================================|
-Train Loss 0.032 Valid Loss 0.06 lr 0.0001
-Training (14/36) 100% |=======================================================|
-Validating (14/36) 100% |=====================================================|
-Train Loss 0.03 Valid Loss 0.058 lr 0.0001
-Training (15/36) 100% |=======================================================|
-Validating (15/36) 100% |=====================================================|
-Train Loss 0.03 Valid Loss 0.058 lr 0.0001
-Training (16/36) 100% |=======================================================|
-Validating (16/36) 100% |=====================================================|
-Train Loss 0.029 Valid Loss 0.059 lr 0.0001
-Training (17/36) 100% |=======================================================|
-Validating (17/36) 100% |=====================================================|
-Train Loss 0.028 Valid Loss 0.059 lr 0.0001
-Training (18/36) 100% |=======================================================|
-Validating (18/36) 100% |=====================================================|
-Train Loss 0.029 Valid Loss 0.057 lr 0.0001
-Training (19/36) 100% |=======================================================|
-Validating (19/36) 100% |=====================================================|
-Train Loss 0.028 Valid Loss 0.058 lr 0.0001
-Training (20/36) 100% |=======================================================|
-Validating (20/36) 100% |=====================================================|
-Train Loss 0.026 Valid Loss 0.058 lr 0.0001
-Training (21/36) 100% |=======================================================|
-Validating (21/36) 100% |=====================================================|
-Train Loss 0.026 Valid Loss 0.058 lr 1.0000000000000003e-05
-Training (22/36) 100% |=======================================================|
-Validating (22/36) 100% |=====================================================|
-Train Loss 0.026 Valid Loss 0.058 lr 1.0000000000000003e-05
-Training (23/36) 100% |=======================================================|
-Validating (23/36) 100% |=====================================================|
-Train Loss 0.024 Valid Loss 0.056 lr 1.0000000000000003e-05
-Training (24/36) 100% |=======================================================|
-Validating (24/36) 100% |=====================================================|
-Train Loss 0.024 Valid Loss 0.058 lr 1.0000000000000003e-05
-Training (25/36) 100% |=======================================================|
-Validating (25/36) 100% |=====================================================|
-Train Loss 0.026 Valid Loss 0.059 lr 1.0000000000000003e-05
-Training (26/36) 100% |=======================================================|
-Validating (26/36) 100% |=====================================================|
-Train Loss 0.026 Valid Loss 0.058 lr 1.0000000000000003e-05
-Training (27/36) 100% |=======================================================|
-Validating (27/36) 100% |=====================================================|
-Train Loss 0.026 Valid Loss 0.056 lr 1.0000000000000003e-05
-Training (28/36) 100% |=======================================================|
-Validating (28/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.058 lr 1.0000000000000003e-05
-Training (29/36) 100% |=======================================================|
-Validating (29/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.057 lr 1.0000000000000003e-05
-Training (30/36) 100% |=======================================================|
-Validating (30/36) 100% |=====================================================|
-Train Loss 0.024 Valid Loss 0.057 lr 1.0000000000000003e-05
-Training (31/36) 100% |=======================================================|
-Validating (31/36) 100% |=====================================================|
-Train Loss 0.024 Valid Loss 0.057 lr 1.0000000000000002e-06
-Training (32/36) 100% |=======================================================|
-Validating (32/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.057 lr 1.0000000000000002e-06
-Training (33/36) 100% |=======================================================|
-Validating (33/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.057 lr 1.0000000000000002e-06
-Training (34/36) 100% |=======================================================|
-Validating (34/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.056 lr 1.0000000000000002e-06
-Training (35/36) 100% |=======================================================|
-Validating (35/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.057 lr 1.0000000000000002e-06
-Training (36/36) 100% |=======================================================|
-Validating (36/36) 100% |=====================================================|
-Train Loss 0.025 Valid Loss 0.056 lr 1.0000000000000002e-06
+...
+(省略)
+...
 training time cost: 32.7671793
 model saved
 prediction time cost: 0.025467499999999976
@@ -458,6 +356,6 @@ f1: 0.9828326180257511
 auc: 0.9966211279953244
 ```
 
-Train and validation loss curve:
+学習と検証の損失曲線：
 
 <img src="fig/history.png" width=80%>
