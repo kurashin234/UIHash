@@ -167,6 +167,75 @@ def extract_view_imgs_from_rico(rico_root_path: str):
             print(k)
 
 
+def extract_view_imgs_from_web(folder: str):
+    """
+    extract view images from web crawler output (json + png)
+    """
+    files = [f for f in listdir(folder) if f.endswith('.json')]
+    total = len(files)
+    print(f"Found {total} json files in {folder}")
+    
+    m = 0
+    for k, json_file in enumerate(files):
+        json_path = join(folder, json_file)
+        # Corresponding png file
+        png_file = json_file.replace('.json', '.png')
+        png_path = join(folder, png_file)
+        
+        if not exists(png_path):
+            print(f"Image not found for {json_file}")
+            continue
+            
+        try:
+            with open(json_path, mode="r", encoding="utf-8") as f:
+                jo = json.load(f)
+            
+            ui_img = cv2.imread(png_path, 1)
+            if ui_img is None:
+                print(f"Failed to load image: {png_path}")
+                continue
+
+            views = []
+            read_rico_json_nodes(views, jo)
+            
+            for n in views:
+                # Rico format: [x1, y1, x2, y2, label]
+                w1, h1, w2, h2, label = n
+                w1, h1, w2, h2 = int(w1), int(h1), int(w2), int(h2)
+                
+                # Clip coordinates to image bounds
+                h, w, _ = ui_img.shape
+                w1 = max(0, min(w1, w))
+                w2 = max(0, min(w2, w))
+                h1 = max(0, min(h1, h))
+                h2 = max(0, min(h2, h))
+                
+                if w2 <= w1 or h2 <= h1:
+                    continue
+
+                img = ui_img[h1:h2, w1:w2]
+                if img.shape[0] == 0 or img.shape[1] == 0:
+                    continue
+                
+                try:
+                    # Save to views/label/m.jpg
+                    img_save_path = join(folder, "views", label)
+                    if not exists(img_save_path):
+                        makedirs(img_save_path)
+                    cv2.imwrite(join(img_save_path, f"{m}.jpg"), img)
+                    m += 1
+                except cv2.error as e:
+                    print(f'CV2ERR: {e}')
+                    
+        except Exception as e:
+            print(f"Error processing {json_file}: {e}")
+            
+        if (k+1) % 10 == 0:
+            print(f"Processed {k+1}/{total}")
+
+    print(f"Done! Extracted {m} views.")
+
+
 def parse_arg_extract_view_images(input_args: list):
     parser = argparse.ArgumentParser(description="Extract view images from UIs, "
                                                  "support UI hierarchy printed by "
@@ -175,6 +244,8 @@ def parse_arg_extract_view_images(input_args: list):
                         help="the path where UI hierarchy exists")
     parser.add_argument("--rico", "-r", action="store_true", default=False,
                         help="extract view images from rico UIs")
+    parser.add_argument("--web", "-w", action="store_true", default=False,
+                        help="extract view images from web crawler output")
     parser.add_argument("--naivexml", "-n", action="store_true",
                         help="assign it when using naive adb, "
                              "and ignore it when using uiautomator2 xml")
@@ -189,6 +260,8 @@ if __name__ == '__main__':
     t1 = time.perf_counter()
     if args.rico:
         extract_view_imgs_from_rico(args.input_path)
+    elif args.web:
+        extract_view_imgs_from_web(args.input_path)
     else:
         extract_view_imgs(args.input_path,
                           skip_existance=args.skip, naive_xml=args.naivexml)
