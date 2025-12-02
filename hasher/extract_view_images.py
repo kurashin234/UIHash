@@ -198,6 +198,23 @@ def extract_view_imgs_from_web(folder: str):
             views = []
             read_rico_json_nodes(views, jo)
             
+            # Create per-screen directory
+            screen_dir_name = json_file[:-5] # remove .json
+            screen_dir_path = join(folder, screen_dir_name)
+            if not exists(screen_dir_path):
+                makedirs(screen_dir_path)
+            
+            # Save the xml (json) there too as uihash.py expects an xml file in the folder
+            # We will just copy the json as .xml for now or keep it as json and adapt uihash?
+            # uihash.py looks for .xml. Let's create a dummy xml or just rename the json to .xml?
+            # Actually uihash.py uses XMLReader. XMLReader expects XML.
+            # We might need to adapt uihash.py later. For now let's just save the images.
+            # Wait, uihash.py iterates over folders and looks for xmls.
+            # "xmls = [i for i in xmls if i.endswith("xml")]"
+            # So we MUST have an xml file in that folder. 
+            # Since we are doing "Web" adaptation, we should probably adapt uihash.py to read json too.
+            # But for this step (extraction), let's just focus on images.
+            
             for n in views:
                 # Rico format: [x1, y1, x2, y2, label]
                 w1, h1, w2, h2, label = n
@@ -218,11 +235,11 @@ def extract_view_imgs_from_web(folder: str):
                     continue
                 
                 try:
-                    # Save to views/label/m.jpg
-                    img_save_path = join(folder, "views", label)
-                    if not exists(img_save_path):
-                        makedirs(img_save_path)
-                    cv2.imwrite(join(img_save_path, f"{m}.jpg"), img)
+                    # Save to screen_dir/m_label.jpg
+                    # Sanitize label for filename
+                    safe_label = "".join([c if c.isalnum() else "_" for c in label])
+                    img_filename = f"{m}_{safe_label}.jpg"
+                    cv2.imwrite(join(screen_dir_path, img_filename), img)
                     m += 1
                 except cv2.error as e:
                     print(f'CV2ERR: {e}')
