@@ -25,30 +25,9 @@ def gen_hash_data(ipt_paths: list,
                   hash_grid_size: Tuple[int, int] = (5, 5),
                   filter_few_nodes: int = 6,
                   input_dataset_name: str = "",
-                  naive_xml: bool = False):
-    """ Generate uihash for one or more input path(s). Each input path
-    includes screenshots, hierarchies, and re-identified view types
-    for each UI
-
-    Args:
-      filter_few_nodes (int): 0 to remove filter, otherwise the threshold
-        of the minimal accepted visible nodes in a UI
-      ipt_paths (list): The complete input paths, each one represent a dataset
-        or a subset (e.g., original and repackage apps in RePack). Each folder
-        in the path holds the raw UI data (screenshot, view hierarchy, and images
-        and types of each visible view)
-      opt_path (str): The output path to store the uihash results
-      view_img_dataset (str): The path of the training data for view type
-        reidentification. The type total num, i.e., channel num for uihash, is
-        determined according to this
-      input_dataset_name (str): A magic paremeter, please make it 'ori' when
-        the only ipt_path is the original apps in a labeled dataset like RePack,
-        and 're' for the repackaged apps. Just keep it unset when working on an
-        unlabeled dataset
-      hash_grid_size ((int, int)): The (2D) grid size expected for uihash
-      naive_xml (bool): false when use uiautomator2 xml, if the hierarchy
-        is dumped by naive adb, then true
-    """
+                  naive_xml: bool = False,
+                  num_classes: int = 0):
+    """ Generate uihash for one or more input path(s). """
 
     if len(opt_path) == 0:
         opt_path = join(os.path.abspath(os.path.dirname(__file__)),
@@ -60,12 +39,17 @@ def gen_hash_data(ipt_paths: list,
 
     hash_list = list()
     apk_xml_list = list()
-    classes_names = listdir(view_img_dataset)
-    classes_names = [c for c in classes_names if
-                     os.path.isdir(os.path.join(view_img_dataset, c))]
+    
+    if num_classes > 0:
+        type_number = num_classes
+    else:
+        classes_names = listdir(view_img_dataset)
+        classes_names = [c for c in classes_names if
+                         os.path.isdir(os.path.join(view_img_dataset, c))]
+        # +1: others (images in most cases)
+        type_number = len(classes_names) + 1
+        
     k = 0
-    # +1: others (images in most cases)
-    type_number = len(classes_names) + 1
     for folder in ipt_paths:
         print(f"----------entering: {folder}----------")
         pkgs = listdir(folder)
@@ -74,8 +58,10 @@ def gen_hash_data(ipt_paths: list,
 
         for i, pkg in enumerate(sorted(pkgs)):
             print(f'{i + 1}/{total} {pkg}')
+            if not os.path.isdir(join(folder, pkg)):
+                continue
             xmls = listdir(join(folder, pkg))
-            xmls = [i for i in xmls if i.endswith("xml")]
+            xmls = [i for i in xmls if i.endswith("xml") or i.endswith("json")]
             for xml in xmls:
                 xml_path = join(folder, pkg, xml)
                 nodes = XMLReader(xml_path, naive_xml=naive_xml).node_dicts
@@ -104,7 +90,7 @@ def parse_arg_uihash(input_args: list):
     parser.add_argument("input_path", help="input paths",
                         type=str, nargs='+', action='append')
     parser.add_argument("view_image_path", type=str,
-                        help="path for the view image dataset")
+                        help="path for the view image dataset (or dummy if --num_classes is set)")
     parser.add_argument("--output_path", "-o", help="output path",
                         type=str, default="")
     parser.add_argument("--naivexml", "-n", action="store_true",
@@ -119,13 +105,17 @@ def parse_arg_uihash(input_args: list):
     parser.add_argument("--filter", "-f", default=5, type=int,
                         help="0 to remove filter, otherwise the threshold of "
                              "the minimal accepted visible nodes in a UI")
+    parser.add_argument("--num_classes", "-c", default=0, type=int,
+                        help="Manually specify number of classes (bypasses view_image_path check)")
 
     _args = parser.parse_args(input_args)
     return _args
 
 
 if __name__ == "__main__":
+    print("Starting uihash main...", flush=True)
     args = parse_arg_uihash(sys.argv[1:])
+    print(f"Parsed args: {args}", flush=True)
     try:
         t1, t2 = args.grid_size.split(',')
         t1, t2 = int(t1), int(t2)
@@ -137,10 +127,15 @@ if __name__ == "__main__":
                       hash_grid_size=grid_size,
                       filter_few_nodes=args.filter,
                       input_dataset_name=args.dataset_name,
-                      naive_xml=args.naivexml)
+                      naive_xml=args.naivexml,
+                      num_classes=args.num_classes)
         end = perf_counter()
         print(f"time cost {args.grid_size}:", end - start)
 
     except ValueError:
         print("invalid value for grid_size. example: 5,5")
+        exit(1)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         exit(1)

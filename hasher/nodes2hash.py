@@ -7,6 +7,7 @@ from util.util_math import get_iou, amp_small_scaler
 from PIL import Image
 from os.path import join
 from xml2nodes import XMLReader
+import os
 
 
 class Nodes2Hash:
@@ -140,13 +141,20 @@ class Nodes2Hash:
         """
         if nodes is None:
             nodes = XMLReader(xml_path, naive_xml=naive_xml).node_dicts
+        base_path = os.path.splitext(xml_path)[0]
         try:
-            img = Image.open(f"{xml_path[:-4]}.jpg")
+            if os.path.exists(f"{base_path}.jpg"):
+                img = Image.open(f"{base_path}.jpg")
+            elif os.path.exists(f"{base_path}.png"):
+                img = Image.open(f"{base_path}.png")
+            else:
+                # Fallback to original logic if neither exists (though unlikely)
+                img = Image.open(f"{xml_path[:-4]}.jpg")
         except PIL.UnidentifiedImageError:
-            print(f"unable to load image {xml_path[:-4]}.jpg")
+            print(f"unable to load image for {base_path}")
             return None
         except FileNotFoundError:
-            print(f"image {xml_path[:-4]}.jpg not exists")
+            print(f"image for {base_path} not exists")
             return None
         self._screen_h = img.size[0]
         self._screen_v = img.size[1]
@@ -194,7 +202,17 @@ class Nodes2Hash:
 
         mat = np.zeros((self.channels, self._h_tick * self._v_tick))
         type_dict = dict()
+        
+        # Try Android path first (subdirectory named after xml)
         type_file = join(xml_path[:-4], "classify.txt")
+        if not os.path.exists(type_file):
+            # Try Web path (same directory as json/xml)
+            type_file = join(os.path.dirname(xml_path), "classify.txt")
+            
+        if not os.path.exists(type_file):
+             print(f"classify.txt not found for {xml_path}")
+             return None
+
         with open(type_file, mode='r') as f:
             raw_type_dict = eval(f.readline())
         for key in raw_type_dict:
