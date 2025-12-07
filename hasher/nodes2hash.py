@@ -151,11 +151,15 @@ class Nodes2Hash:
                 # Fallback to original logic if neither exists (though unlikely)
                 img = Image.open(f"{xml_path[:-4]}.jpg")
         except PIL.UnidentifiedImageError:
-            print(f"unable to load image for {base_path}")
+            print(f"DEBUG: unable to load image for {base_path}", flush=True)
             return None
         except FileNotFoundError:
-            print(f"image for {base_path} not exists")
+            print(f"DEBUG: image for {base_path} not exists", flush=True)
             return None
+        
+        # ... (omitted lines)
+
+
         self._screen_h = img.size[0]
         self._screen_v = img.size[1]
         for n in nodes:
@@ -210,7 +214,7 @@ class Nodes2Hash:
             type_file = join(os.path.dirname(xml_path), "classify.txt")
             
         if not os.path.exists(type_file):
-             print(f"classify.txt not found for {xml_path}")
+             print(f"DEBUG: classify.txt not found for {xml_path}. Checked: {type_file}", flush=True)
              return None
 
         with open(type_file, mode='r') as f:

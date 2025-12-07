@@ -4,3 +4,4 @@
 *.npy
 *.pyc
 *.txt
+!requirements.txt

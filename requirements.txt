@@ -4,7 +4,6 @@ pandas
 torch
 bokeh
 umap-learn
-
 torchvision
 progressbar2
 Pillow

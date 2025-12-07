@@ -28,7 +28,7 @@ class WildDataSet(Dataset):
 
         size_str = f"{hash_size[1]}x{hash_size[2]}x{hash_size[0]}"
         base_path = join(os.path.abspath(os.path.dirname(__file__)),
-                         "..", "output")
+                         "..", "output_web")
         npzfile_raw = join(base_path, "dataset",
                            f"{dataset_name}_{size_str}_raw.npz")
         self.pairs_path = join(base_path, "dataset",

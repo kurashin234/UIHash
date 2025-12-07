@@ -171,86 +171,83 @@ def extract_view_imgs_from_web(folder: str):
     """
     extract view images from web crawler output (json + png)
     """
-    files = [f for f in listdir(folder) if f.endswith('.json')]
-    total = len(files)
-    print(f"Found {total} json files in {folder}")
+    total_views = 0
+    print(f"Scanning {folder} for web captures...")
     
-    m = 0
-    for k, json_file in enumerate(files):
-        json_path = join(folder, json_file)
-        # Corresponding png file
-        png_file = json_file.replace('.json', '.png')
-        png_path = join(folder, png_file)
-        
-        if not exists(png_path):
-            print(f"Image not found for {json_file}")
+    for root, dirs, files in walk(folder):
+        # Skip if we are inside a 'hash' directory or other non-capture dirs
+        if "hash" in root:
             continue
             
-        try:
-            with open(json_path, mode="r", encoding="utf-8") as f:
-                jo = json.load(f)
+        json_files = [f for f in files if f.endswith('.json')]
+        
+        for json_file in json_files:
+            json_path = join(root, json_file)
+            png_file = json_file.replace('.json', '.png')
+            png_path = join(root, png_file)
             
-            ui_img = cv2.imread(png_path, 1)
-            if ui_img is None:
-                print(f"Failed to load image: {png_path}")
+            # Use 'web_' prefix as a heuristic to identify capture files, 
+            # and verify png exists
+            if not json_file.startswith('web_') or not exists(png_path):
                 continue
-
-            views = []
-            read_rico_json_nodes(views, jo)
-            
-            # Create per-screen directory
-            screen_dir_name = json_file[:-5] # remove .json
-            screen_dir_path = join(folder, screen_dir_name)
-            if not exists(screen_dir_path):
-                makedirs(screen_dir_path)
-            
-            # Save the xml (json) there too as uihash.py expects an xml file in the folder
-            # We will just copy the json as .xml for now or keep it as json and adapt uihash?
-            # uihash.py looks for .xml. Let's create a dummy xml or just rename the json to .xml?
-            # Actually uihash.py uses XMLReader. XMLReader expects XML.
-            # We might need to adapt uihash.py later. For now let's just save the images.
-            # Wait, uihash.py iterates over folders and looks for xmls.
-            # "xmls = [i for i in xmls if i.endswith("xml")]"
-            # So we MUST have an xml file in that folder. 
-            # Since we are doing "Web" adaptation, we should probably adapt uihash.py to read json too.
-            # But for this step (extraction), let's just focus on images.
-            
-            for n in views:
-                # Rico format: [x1, y1, x2, y2, label]
-                w1, h1, w2, h2, label = n
-                w1, h1, w2, h2 = int(w1), int(h1), int(w2), int(h2)
                 
-                # Clip coordinates to image bounds
-                h, w, _ = ui_img.shape
-                w1 = max(0, min(w1, w))
-                w2 = max(0, min(w2, w))
-                h1 = max(0, min(h1, h))
-                h2 = max(0, min(h2, h))
+            try:
+                with open(json_path, mode="r", encoding="utf-8") as f:
+                    jo = json.load(f)
                 
-                if w2 <= w1 or h2 <= h1:
+                ui_img = cv2.imread(png_path, 1)
+                if ui_img is None:
+                    print(f"Failed to load image: {png_path}")
                     continue
 
-                img = ui_img[h1:h2, w1:w2]
-                if img.shape[0] == 0 or img.shape[1] == 0:
-                    continue
+                views = []
+                read_rico_json_nodes(views, jo)
                 
-                try:
-                    # Save to screen_dir/m_label.jpg
-                    # Sanitize label for filename
-                    safe_label = "".join([c if c.isalnum() else "_" for c in label])
-                    img_filename = f"{m}_{safe_label}.jpg"
-                    cv2.imwrite(join(screen_dir_path, img_filename), img)
-                    m += 1
-                except cv2.error as e:
-                    print(f'CV2ERR: {e}')
+                # Create per-screen directory inside the CURRENT root
+                screen_dir_name = json_file[:-5] # remove .json
+                # Sanitize if needed? Filename should be safe for dir name
+                screen_dir_path = join(root, screen_dir_name)
+                
+                if not exists(screen_dir_path):
+                    makedirs(screen_dir_path)
+                
+                m = 0
+                for n in views:
+                    # Rico format: [x1, y1, x2, y2, label]
+                    w1, h1, w2, h2, label = n
+                    w1, h1, w2, h2 = int(w1), int(h1), int(w2), int(h2)
                     
-        except Exception as e:
-            print(f"Error processing {json_file}: {e}")
-            
-        if (k+1) % 10 == 0:
-            print(f"Processed {k+1}/{total}")
+                    # Clip coordinates to image bounds
+                    h, w, _ = ui_img.shape
+                    w1 = max(0, min(w1, w))
+                    w2 = max(0, min(w2, w))
+                    h1 = max(0, min(h1, h))
+                    h2 = max(0, min(h2, h))
+                    
+                    if w2 <= w1 + 1 or h2 <= h1 + 1:
+                        # Skip if empty or 1px
+                        continue
 
-    print(f"Done! Extracted {m} views.")
+                    img = ui_img[h1:h2, w1:w2]
+                    if img is None or img.size == 0 or img.shape[0] == 0:
+                        continue
+                        
+                    try:
+                        # Sanitize label for filename
+                        safe_label = "".join([c if c.isalnum() else "_" for c in label])
+                        img_filename = f"{m}_{safe_label}.jpg"
+                        cv2.imwrite(join(screen_dir_path, img_filename), img)
+                        m += 1
+                    except cv2.error as e:
+                        print(f'CV2ERR: {e}')
+                        
+                # print(f"Processed {json_file}: {m} views extracted to {screen_dir_name}")
+                total_views += m
+
+            except Exception as e:
+                print(f"Error processing {json_path}: {e}")
+
+    print(f"Done! Extracted {total_views} views in total.")
 
 
 def parse_arg_extract_view_images(input_args: list):
@@ -265,7 +262,7 @@ def parse_arg_extract_view_images(input_args: list):
                         help="extract view images from web crawler output")
     parser.add_argument("--naivexml", "-n", action="store_true",
                         help="assign it when using naive adb, "
-                             "and ignore it when using uiautomator2 xml")
+                        "and ignore it when using uiautomator2 xml")
     parser.add_argument("--skip", "-s", action="store_true", default=True,
                         help="skip the existance items")
     _args = parser.parse_args(input_args)

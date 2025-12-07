@@ -36,11 +36,16 @@ class WebCrawler:
         Crawl a site starting from start_url.
         """
         self.start_domain = urlparse(start_url).netloc
+        # Create domain-specific output directory
+        timestamp = int(time.time())
+        site_dirname = f"{self.start_domain.replace('.', '_')}_{timestamp}"
+        self.site_output_dir = os.path.join(output_dir, site_dirname)
+        
         self.queue.append(start_url)
         self.visited_urls.add(start_url)
         
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if not os.path.exists(self.site_output_dir):
+            os.makedirs(self.site_output_dir)
 
         pages_crawled = 0
         while self.queue and pages_crawled < self.max_pages:
@@ -52,7 +57,7 @@ class WebCrawler:
                 time.sleep(3) # Wait for load
                 
                 # Process the page (scroll and capture)
-                self._process_page(url, output_dir)
+                self._process_page(url)
                 
                 # Find new links
                 self._extract_links(url)
@@ -61,7 +66,7 @@ class WebCrawler:
             except Exception as e:
                 print(f"Error crawling {url}: {e}")
 
-    def _process_page(self, url, output_dir):
+    def _process_page(self, url):
         """
         Capture screenshots and DOM while scrolling.
         """
@@ -77,16 +82,17 @@ class WebCrawler:
             filename_base = f"web_{timestamp}_{scroll_count}"
             
             # Screenshot
-            screenshot_path = os.path.join(output_dir, f"{filename_base}.png")
+            screenshot_path = os.path.join(self.site_output_dir, f"{filename_base}.png")
             self.driver.save_screenshot(screenshot_path)
             
-            # DOM
-            dom_data = self._extract_dom()
-            json_path = os.path.join(output_dir, f"{filename_base}.json")
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(dom_data, f, indent=2)
+            # DOM (Using JS for viewport-aware extraction)
+            dom_data = self._extract_dom_js()
+            if dom_data:
+                json_path = os.path.join(self.site_output_dir, f"{filename_base}.json")
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(dom_data, f, indent=2)
                 
-            print(f"  Saved capture {scroll_count}: {filename_base}")
+            print(f"  Saved capture {scroll_count}: {filename_base} in {self.site_output_dir}")
 
             # Scroll down
             if current_scroll + viewport_height >= scroll_height:
@@ -119,64 +125,71 @@ class WebCrawler:
         except:
             pass
 
-    def _extract_dom(self):
+    def _extract_dom_js(self):
         """
-        Extract DOM structure recursively.
+        Extract visible DOM structure using JavaScript.
+        This captures elements relative to the viewport.
         """
-        try:
-            root = self.driver.find_element(By.TAG_NAME, "body")
-        except:
-            try:
-                root = self.driver.find_element(By.TAG_NAME, "frameset")
-            except:
-                root = self.driver.find_element(By.TAG_NAME, "html")
-        
-        return self._process_element(root)
-
-    def _process_element(self, element):
-        """
-        Process a single element and its children.
-        """
-        try:
-            tag_name = element.tag_name
-            rect = element.rect
-            x, y, w, h = rect['x'], rect['y'], rect['width'], rect['height']
+        js_script = """
+        function getVisibleDom(node) {
+            if (node.nodeType !== Node.ELEMENT_NODE) return null;
             
-            if w <= 0 or h <= 0 or not element.is_displayed():
-                return None
-
-            node = {
-                "componentLabel": tag_name,
-                "bounds": [int(x), int(y), int(x + w), int(y + h)],
-                "children": []
+            const rect = node.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return null;
+            
+            // Check if in viewport
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Intersection check: checks if the element overlaps with the viewport
+            if (rect.bottom < 0 || rect.top > viewportHeight || 
+                rect.right < 0 || rect.left > viewportWidth) {
+                return null;
+            }
+            
+            // Check computed visibility
+            const style = window.getComputedStyle(node);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                return null;
             }
 
-            children = element.find_elements(By.XPATH, "./*")
-            for child in children:
-                child_node = self._process_element(child)
-                if child_node:
-                    node["children"].append(child_node)
+            const children = [];
+            for (const child of node.children) {
+                const childNode = getVisibleDom(child);
+                if (childNode) children.push(childNode);
+            }
             
-            return node
+            const tagName = node.tagName.toLowerCase();
+            const interact = ['a', 'button', 'input', 'select', 'textarea'].includes(tagName);
 
-        except Exception:
-            return None
+            return {
+                "componentLabel": tagName,
+                "bounds": [Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom)],
+                "children": children,
+                "visible": true,
+                "interact": interact
+            };
+        }
+        return getVisibleDom(document.body);
+        """
+        return self.driver.execute_script(js_script)
 
     def close(self):
         self.driver.quit()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Web Crawler for UIHash")
-    parser.add_argument("url", help="Target URL to crawl")
+    parser.add_argument("urls", nargs='+', help="Target URLs to crawl")
     parser.add_argument("--output", "-o", default="output_web", help="Output directory")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
-    parser.add_argument("--pages", type=int, default=10, help="Max pages to crawl")
+    parser.add_argument("--pages", type=int, default=10, help="Max pages to crawl per URL")
     parser.add_argument("--scrolls", type=int, default=3, help="Max scrolls per page")
     
     args = parser.parse_args()
     
     crawler = WebCrawler(headless=args.headless, max_pages=args.pages, max_scrolls=args.scrolls)
     try:
-        crawler.crawl(args.url, args.output)
+        for url in args.urls:
+            crawler.crawl(url, args.output)
     finally:
         crawler.close()

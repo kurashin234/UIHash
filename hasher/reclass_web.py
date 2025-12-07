@@ -43,54 +43,60 @@ TAG_MAP = {
 
 def reclass_web(input_path: str):
     """
-    Scan input_path for subdirectories (screens) and generate classify.txt
+    Scan input_path for subdirectories (screens) recursively and generate classify.txt
     """
-    print(f"Reclassifying Web UIs in {input_path}...")
+    print(f"Scanning {input_path} for Web UIs...")
     
-    # Find screen directories (those starting with web_)
-    dirs = [d for d in listdir(input_path) if os.path.isdir(join(input_path, d)) and d.startswith("web_")]
-    total = len(dirs)
-    
-    for k, d in enumerate(dirs):
-        dir_path = join(input_path, d)
-        classify_file = join(dir_path, "classify.txt")
-        
-        # Find images
-        imgs = [f for f in listdir(dir_path) if f.endswith(".jpg")]
-        labels = {}
-        
-        for img_file in imgs:
-            # Filename format: {id}_{tag}.jpg
-            # e.g., 12_button.jpg, 5_div.jpg
-            try:
-                parts = img_file[:-4].split('_', 1)
-                if len(parts) < 2:
-                    continue
-                
-                # Extract tag (remove any extra sanitization if needed)
-                tag = parts[1]
-                
-                # Map tag to class ID
-                # Default to 7 (Other) if unknown
-                class_id = TAG_MAP.get(tag, 7)
-                
-                # Format: "index_originalType": reidentifiedType
-                # index is the first part of filename
-                index = parts[0]
-                key = f"{index}_{tag}"
-                labels[key] = class_id
-                
-            except Exception as e:
-                print(f"Error parsing {img_file}: {e}")
-        
-        # Write classify.txt
-        with open(classify_file, 'w') as f:
-            f.write(str(labels))
+    count = 0
+    for root, dirs, files in walk(input_path):
+        # We look for directories that are likely screen captures.
+        # Heuristic: directory name starts with "web_" and contains images
+        if os.path.basename(root).startswith("web_"):
+            dir_path = root
+            classify_file = join(dir_path, "classify.txt")
             
-        if (k+1) % 10 == 0:
-            print(f"Processed {k+1}/{total}")
+            # Find images
+            imgs = [f for f in listdir(dir_path) if f.endswith(".jpg")]
+            if not imgs:
+                continue
+                
+            labels = {}
             
-    print(f"Done! Generated classify.txt for {total} screens.")
+            for img_file in imgs:
+                # Filename format: {id}_{tag}.jpg
+                # e.g., 12_button.jpg, 5_div.jpg
+                try:
+                    parts = img_file[:-4].split('_', 1)
+                    if len(parts) < 2:
+                        continue
+                    
+                    # Extract tag (remove any extra sanitization if needed)
+                    # The tag might be sanitized "div", "a", "button" etc.
+                    tag = parts[1]
+                    
+                    # Fuzzy match or direct map
+                    # Since we use sanitized tags in extractor, they should match keys in TAG_MAP (lowercase)
+                    # or default to 7
+                    class_id = TAG_MAP.get(tag, 7)
+                    
+                    # Format: "index_originalType": reidentifiedType
+                    # index is the first part of filename
+                    index = parts[0]
+                    key = f"{index}_{tag}"
+                    labels[key] = class_id
+                    
+                except Exception as e:
+                    print(f"Error parsing {img_file}: {e}")
+            
+            # Write classify.txt
+            with open(classify_file, 'w') as f:
+                f.write(str(labels))
+                
+            count += 1
+            if count % 10 == 0:
+               print(f"Processed {count} screens...")
+
+    print(f"Done! Generated classify.txt for {count} screens.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tag-based Classifier for Web UIHash")

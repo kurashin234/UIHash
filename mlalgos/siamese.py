@@ -406,11 +406,11 @@ class SiameseModel:
         t2 = perf_counter()
         print(f"done in {t2 - t1} s")
         if not save_score:
-            np.save(join(self.root_path, "output", "dataset",
+            np.save(join(self.root_path, "output_web", "dataset",
                          f"{dataset.dataset_name}_label.npy"),
                     out_labels, allow_pickle=True)
         else:
-            np.save(join(self.root_path, "output", "dataset",
+            np.save(join(self.root_path, "output_web", "dataset",
                          f"{dataset.dataset_name}_score.npy"),
                     scores, allow_pickle=True)
 
