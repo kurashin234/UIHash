@@ -41,6 +41,10 @@ class WebCrawler:
         site_dirname = f"{self.start_domain.replace('.', '_')}_{timestamp}"
         self.site_output_dir = os.path.join(output_dir, site_dirname)
         
+        # Reset state for new domain
+        self.queue.clear()
+        self.visited_urls.clear()
+        
         self.queue.append(start_url)
         self.visited_urls.add(start_url)
         

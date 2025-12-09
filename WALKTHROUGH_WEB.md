@@ -25,6 +25,10 @@ python hasher/reclass_web.py output_web
 **出力:** `output_web/<domain>_<timestamp>/` フォルダ（切り出された画像と `classify.txt` が含まれます）
 *注意: クローラーはURLごとに `output_web/www_google_com_12345/` のようなサブフォルダを作成します。以降の手順は `output_web` を指定すれば全サブフォルダを一括処理します。*
 
+> [!NOTE]
+> 自動抽出された要素画像の一部（特に文字）が見切れることがありますが、これはDOMの矩形計算（`getBoundingClientRect`）と実際のフォント描画領域の微細なズレによるもので、仕様上の動作です。
+> ハッシュ生成（UIHash）は画像の色分布や大まかな形状に基づいているため、数ピクセルの文字欠けは類似度判定に大きな影響を与えません。
+
 ## 3. ハッシュ生成 (Hash)
 最終的なUIHashベクトルを生成します。
 **注意:** Web版ではクラス数が固定（0〜7の8クラス）のため、`--num_classes 8` を指定し、第2引数にはダミーのパス（`dummy`など）を指定します。
@@ -54,9 +58,10 @@ python hasher/reclass_web.py output_web
 
 3. **ハッシュ生成**:
 ```bash
-python hasher/uihash.py output_web dummy --output_path output_web/hash --num_classes 8 --filter 0
+python hasher/uihash.py output_web dummy --output_path output_web/hash --num_classes 8 --filter 0 --grid_size 5,10
 ```
 *注意: `--filter 0` はノード数が少ないページも強制的に処理するために重要です。*
+*ヒント: Webページは縦長のため、`--grid_size 5,10` (横5x縦10) のように縦の分割数を増やすと、より正確な特徴を捉えられる場合があります。*
 
 4. **比較実行**:
 ```bash
