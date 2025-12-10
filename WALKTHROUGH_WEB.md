@@ -65,7 +65,7 @@ python hasher/uihash.py output_web dummy --output_path output_web/hash --num_cla
 
 4. **比較実行**:
 ```bash
-python hasher/compare_hashes.py output_web/hash/hash_5x5x8.npy output_web/hash/name_5x5x8.npy --top 10 --threshold 0.1 --cross
+python hasher/compare_hashes.py output_web/hash/hash_5x10x8.npy output_web/hash/name_5x10x8.npy --top 10 --threshold 0.1 --cross
 ```
 *   `--cross`: 同一サイト内の比較を除外し、異なるサイト間の類似度のみを表示します。
 *   これにより、類似度の高いペアがリストアップされます。特定のURLペアのスコアを確認したい場合は、出力リストを確認してください（現在は全ペアの総当たりからトップKを表示する仕様です）。

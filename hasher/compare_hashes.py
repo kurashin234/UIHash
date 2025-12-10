@@ -91,6 +91,7 @@ def compare_hashes(hash_file: str, name_file: str, top_k: int = 10, threshold: f
         # Clean up names (remove redundant parts if needed)
         # Format in uihash.py is "pkg xml"
         
+        print(f"{count + 1}: ")
         print(f"[{score:.4f}]")
         print(f"  A: {name_i}")
         print(f"  B: {name_j}")
