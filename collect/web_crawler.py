@@ -136,10 +136,10 @@ class WebCrawler:
         """
         js_script = """
         function getVisibleDom(node) {
-            if (node.nodeType !== Node.ELEMENT_NODE) return null;
+            if (node.nodeType !== Node.ELEMENT_NODE) return [];
             
             const rect = node.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) return null;
+            if (rect.width === 0 || rect.height === 0) return [];
             
             // Check if in viewport
             const viewportWidth = window.innerWidth;
@@ -148,33 +148,43 @@ class WebCrawler:
             // Intersection check: checks if the element overlaps with the viewport
             if (rect.bottom < 0 || rect.top > viewportHeight || 
                 rect.right < 0 || rect.left > viewportWidth) {
-                return null;
+                return [];
             }
             
             // Check computed visibility
             const style = window.getComputedStyle(node);
             if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-                return null;
+                return [];
             }
 
             const children = [];
             for (const child of node.children) {
-                const childNode = getVisibleDom(child);
-                if (childNode) children.push(childNode);
+                const childNodes = getVisibleDom(child);
+                children.push(...childNodes);
             }
             
             const tagName = node.tagName.toLowerCase();
+            
+            // If it's a div, unwrap it (return children only)
+            if (tagName === 'div') {
+                return children;
+            }
+
+            // If it's an SVG, treat as a single image (ignore children like path, polygon)
+            const childrenToUse = tagName === 'svg' ? [] : children;
+
             const interact = ['a', 'button', 'input', 'select', 'textarea'].includes(tagName);
 
-            return {
+            return [{
                 "componentLabel": tagName,
                 "bounds": [Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom)],
-                "children": children,
+                "children": childrenToUse,
                 "visible": true,
                 "interact": interact
-            };
+            }];
         }
-        return getVisibleDom(document.body);
+        const roots = getVisibleDom(document.body);
+        return roots.length > 0 ? roots[0] : null;
         """
         return self.driver.execute_script(js_script)
 
