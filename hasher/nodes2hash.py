@@ -201,6 +201,12 @@ class Nodes2Hash:
                     t = 0.12
                 elif self._h_tick == 2 and self._v_tick == 2:
                     t = 0.2
+                elif self._h_tick == 5 and self._v_tick == 10:
+                    t = 0.07
+                # Save normalized area for later filtering
+                n['normalized_area'] = area
+                
+                # Overlap ratio check
                 if iou / area > t:
                     n['area4grids'][i] = iou
 
@@ -261,6 +267,13 @@ class Nodes2Hash:
                     _c = 7
                 else:
                     _c = 7
+
+            # Filtering Logic: Ignore tiny noise, but preserve Text (5) and Images (7)
+            # Use saved normalized_area if available
+            if 'normalized_area' in n:
+                # Allow Text (5) and Images (7) to pass even if small
+                if n['normalized_area'] < 0.01 and _c not in [5, 7]:
+                    continue
 
             for j, k in enumerate(n['area4grids']):
                 mat[_c][j] += k

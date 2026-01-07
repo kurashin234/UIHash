@@ -426,9 +426,30 @@ class LabelledDataSet(Dataset):
                  npz_prefix: str = "Re", shuffle_data: bool = True):
 
         size_str = f"{hash_size[1]}x{hash_size[2]}x{hash_size[0]}"
-        out_path = join(os.path.abspath(os.path.dirname(__file__)),
-                        "..", "output", "dataset")
-        npzfile = join(out_path, f"{npz_prefix}_{size_str}.npz")
+        
+        # Search paths
+        candidates = ["output_web", "output_web_train", "output"]
+        found_path = None
+        
+        root_dir = join(os.path.abspath(os.path.dirname(__file__)), "..")
+        
+        for cand in candidates:
+            p = join(root_dir, cand, "dataset")
+            f = join(p, f"{npz_prefix}_{size_str}.npz")
+            if exists(f):
+                out_path = p
+                npzfile = f
+                found_path = f
+                print(f"Found dataset at: {f}")
+                break
+        
+        if found_path is None:
+            # Default fallback to create new in output/dataset? 
+            # Or just use the first candidate for trying generic loading
+            out_path = join(root_dir, "output", "dataset")
+            npzfile = join(out_path, f"{npz_prefix}_{size_str}.npz")
+
+        self.transform = transform
         self.transform = transform
         if exists(npzfile):
             self.data = np.load(npzfile, allow_pickle=True)['data']

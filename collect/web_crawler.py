@@ -26,6 +26,8 @@ class WebCrawler:
         options.add_argument('--log-level=3')
         
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        self.driver.set_page_load_timeout(30)
+        self.driver.set_script_timeout(30)
         self.max_pages = max_pages
         self.max_scrolls = max_scrolls
         self.visited_urls = set()

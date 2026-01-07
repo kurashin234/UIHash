@@ -247,3 +247,25 @@ class NNParas:
         nn.Dropout(0.5),
         nn.Linear(256, 20),
     )
+
+    @property
+    def cnn5x10(self):
+        # Input (Channel, 5, 10)
+        return nn.Sequential(
+            nn.Conv2d(self.channel, 18, 2),  # (18, 4, 9)
+            nn.PReLU(),
+            nn.Conv2d(18, 72, 2),  # (72, 3, 8)
+            nn.PReLU(),
+        )
+
+    @property
+    def fc5x10(self):
+        # 72 * 3 * 8 = 1728
+        return nn.Sequential(
+            nn.Linear(1728, 512),
+            nn.PReLU(),
+            nn.Linear(512, 256),
+            nn.PReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, 20),
+        )

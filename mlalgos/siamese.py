@@ -12,7 +12,10 @@ import progressbar as bar
 from sys import stdout
 import torch
 from time import perf_counter
-from dataset import LabelledDataSet
+try:
+    from .dataset import LabelledDataSet
+except ImportError:
+    from dataset import LabelledDataSet
 from os.path import exists
 from os import makedirs
 from shutil import copyfile
@@ -51,6 +54,10 @@ class SiameseModel:
         if hash_size[1] == 10 and hash_size[2] == 10:
             cnn = NNParas(self.hash_size[0]).cnn10x10
             fc = NNParas(self.hash_size[0]).fc10x10
+        elif (hash_size[1] == 5 and hash_size[2] == 10) or \
+                (hash_size[1] == 10 and hash_size[2] == 5):
+            cnn = NNParas(self.hash_size[0]).cnn5x10
+            fc = NNParas(self.hash_size[0]).fc5x10
         elif hash_size[1] == 5 and hash_size[2] == 5:
             cnn = NNParas(self.hash_size[0]).cnn5x5
             fc = NNParas(self.hash_size[0]).fc5x5
