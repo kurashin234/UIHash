@@ -221,7 +221,9 @@ def compare_using_siamese(hash_file, name_file, model_path, hash_size_str="8,5,1
                 print(f"Processed {k} pairs...")
 
     # Sort results
-    results.sort(key=lambda x: x[0], reverse=True)
+    # Sort results by Score (Desc) then Distance (Asc)
+    # x[0] is score, x[3] is distance. To sort dist ascending in reverse sort, use -x[3].
+    results.sort(key=lambda x: (x[0], -x[3]), reverse=True)
     
     print(f"\nTop {top_k} Similar Pairs (Threshold > {threshold}):")
     print("=" * 60)
