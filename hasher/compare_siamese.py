@@ -186,7 +186,9 @@ def compare_using_siamese(hash_file, name_file, model_path, hash_size_str="8,5,1
             # splits it.
             # So it expects stacked input!
             
-            combined = torch.cat((t1, t2), 0) # (2*Batch, C, H, W)
+            # Network expects stacked input (2, N, C, H, W) because forward() splits on dim 0 and squeezes dim 0.
+            # Use stack instead of cat to create the extra dimension [2, Batch, ...]
+            combined = torch.stack((t1, t2), 0) # (2, Batch, C, H, W)
             output = net(combined)
             
             # Split output

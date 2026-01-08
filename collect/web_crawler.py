@@ -7,6 +7,7 @@ Supports scrolling and recursive link following.
 import os
 import json
 import time
+import random
 import argparse
 from urllib.parse import urlparse, urljoin
 from collections import deque
@@ -17,7 +18,7 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
 class WebCrawler:
-    def __init__(self, headless=False, max_pages=10, max_scrolls=3):
+    def __init__(self, headless=False, max_pages=10, max_scrolls=3, random_mode=False):
         options = Options()
         if headless:
             options.add_argument('--headless')
@@ -32,6 +33,7 @@ class WebCrawler:
         self.max_scrolls = max_scrolls
         self.visited_urls = set()
         self.queue = deque()
+        self.random_mode = random_mode
 
     def crawl(self, start_url: str, output_dir: str):
         """
@@ -114,6 +116,7 @@ class WebCrawler:
         Find links on the page and add to queue.
         """
         try:
+            new_links = []
             elements = self.driver.find_elements(By.TAG_NAME, "a")
             for elem in elements:
                 href = elem.get_attribute("href")
@@ -127,9 +130,17 @@ class WebCrawler:
                 # Check domain and visited
                 if parsed.netloc == self.start_domain and href not in self.visited_urls:
                     self.visited_urls.add(href)
-                    self.queue.append(href)
-        except:
-            pass
+                    new_links.append(href)
+            
+            # Randomize order if enabled
+            if self.random_mode:
+                random.shuffle(new_links)
+                
+            self.queue.extend(new_links)
+        except Exception as e:
+            print(f"Error in extract_links: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _extract_dom_js(self):
         """
@@ -200,12 +211,20 @@ if __name__ == "__main__":
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
     parser.add_argument("--pages", type=int, default=10, help="Max pages to crawl per URL")
     parser.add_argument("--scrolls", type=int, default=3, help="Max scrolls per page")
+    parser.add_argument("--random", action="store_true", help="Randomize link traversal order")
     
     args = parser.parse_args()
     
-    crawler = WebCrawler(headless=args.headless, max_pages=args.pages, max_scrolls=args.scrolls)
+    crawler = WebCrawler(headless=args.headless, max_pages=args.pages, max_scrolls=args.scrolls, random_mode=args.random)
     try:
         for url in args.urls:
+            # Check if it's a local file
+            if os.path.exists(url):
+                abs_path = os.path.abspath(url)
+                # Convert to file:// URI
+                url = "file:///" + abs_path.replace("\\", "/")
+                print(f"Detected local file, converting to: {url}")
+                
             crawler.crawl(url, args.output)
     finally:
         crawler.close()

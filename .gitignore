@@ -4,4 +4,7 @@
 *.npy
 *.pyc
 *.txt
+*.html
+*.css
+*.js
 !requirements.txt
