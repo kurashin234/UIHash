@@ -150,9 +150,14 @@ def compare_using_siamese(hash_file, name_file, model_path, hash_size_str="8,5,1
         for j in range(i + 1, N):
             site_j = names[j].split(' ')[0] if ' ' in names[j] else names[j].split('_')[0]
             
+            # Debug pairing
+            # print(f"DEBUG: Comparing i={i} ({site_i}) vs j={j} ({site_j})")
+            
             if cross and site_i == site_j:
+                print(f"DEBUG: Skipping pair {i}-{j} because same site: {site_i} == {site_j}")
                 continue
                 
+            print(f"DEBUG: Adding pair {i}-{j}: {site_i} vs {site_j}")
             pair_indices.append((i, j))
             
     print(f"Comparing {len(pair_indices)} pairs...")

@@ -134,6 +134,9 @@ def evaluate(start_index=0, max_count=None):
                 subdirs = [os.path.join(pair_dir, d) for d in os.listdir(pair_dir) if os.path.isdir(os.path.join(pair_dir, d))]
                 if len(subdirs) < 2:
                     print("Error: Failed to download both sites.")
+                    with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
+                        writer = csv.writer(csvfile)
+                        writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (Download Failed)", "", ""])
                     continue
 
                 # Classify

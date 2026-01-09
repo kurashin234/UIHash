@@ -10,6 +10,8 @@ import time
 import random
 import argparse
 from urllib.parse import urlparse, urljoin
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 from collections import deque
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -71,12 +73,23 @@ class WebCrawler:
             url = self.queue.popleft()
             print(f"({pages_crawled + 1}/{self.max_pages}) Crawling: {url}")
             
+            # 1. Pre-check connectivity
+            if not self._is_accessible(url):
+                 print(f"  Skipping {url}: Not accessible (HTTP error or timeout)")
+                 continue
+
             try:
                 self.driver.get(url)
                 time.sleep(3) # Wait for load
                 print(f"  Page Title: {self.driver.title}")
                 print(f"  Current URL: {self.driver.current_url}")
                 
+                # 2. Check for Bot Block / Access Denied in Title
+                bad_titles = ["Access Denied", "403 Forbidden", "Just a moment...", "Attention Required!", "Security Challenge"]
+                if any(bt in self.driver.title for bt in bad_titles):
+                    print(f"  Skipping {url}: Detected bot block page.")
+                    continue
+
                 # Process the page (scroll and capture)
                 self._process_page(url)
                 
@@ -213,6 +226,29 @@ class WebCrawler:
         return roots.length > 0 ? roots[0] : null;
         """
         return self.driver.execute_script(js_script)
+
+    def _is_accessible(self, url):
+        """
+        Check if URL is accessible via generic HTTP request.
+        """
+        try:
+            req = Request(
+                url, 
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
+            )
+            # Use GET but read small amount, or HEAD? 
+            # Some servers 405 on HEAD. Use GET with timeout.
+            with urlopen(req, timeout=10) as response:
+                return response.status < 400
+        except HTTPError as e:
+            print(f"  HTTP Error {e.code}: {e.reason}")
+            return False
+        except URLError as e:
+            print(f"  URL Error: {e.reason}")
+            return False
+        except Exception as e:
+            print(f"  Connection check failed: {e}")
+            return False
 
     def close(self):
         self.driver.quit()
