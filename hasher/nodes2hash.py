@@ -149,7 +149,7 @@ class Nodes2Hash:
                 img = Image.open(f"{base_path}.png")
             else:
                 # Fallback to original logic if neither exists (though unlikely)
-                img = Image.open(f"{xml_path[:-4]}.jpg")
+                img = Image.open(f"{base_path}.jpg")
         except PIL.UnidentifiedImageError:
             print(f"DEBUG: unable to load image for {base_path}", flush=True)
             return None
@@ -214,7 +214,7 @@ class Nodes2Hash:
         type_dict = dict()
         
         # Try Android path first (subdirectory named after xml)
-        type_file = join(xml_path[:-4], "classify.txt")
+        type_file = join(base_path, "classify.txt")
         if not os.path.exists(type_file):
             # Try Web path (same directory as json/xml)
             type_file = join(os.path.dirname(xml_path), "classify.txt")
