@@ -34,6 +34,8 @@ class WebCrawler:
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
+        # Add User-Agent to prevent 403/Blocking
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36')
         
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
         self.driver.set_page_load_timeout(30)
@@ -72,6 +74,8 @@ class WebCrawler:
             try:
                 self.driver.get(url)
                 time.sleep(3) # Wait for load
+                print(f"  Page Title: {self.driver.title}")
+                print(f"  Current URL: {self.driver.current_url}")
                 
                 # Process the page (scroll and capture)
                 self._process_page(url)

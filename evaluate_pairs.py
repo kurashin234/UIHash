@@ -142,7 +142,7 @@ def evaluate(start_index=0, max_count=None):
 
                 # Hash
                 print(">>> Generating Hashes...")
-                run_command([PYTHON_EXE, UIHASH_SCRIPT, pair_dir, "dummy", "--output_path", pair_dir, "--num_classes", "8", "--grid_size", "10,5", "--naivexml"])
+                run_command([PYTHON_EXE, UIHASH_SCRIPT, pair_dir, "dummy", "--output_path", pair_dir, "--num_classes", "8", "--grid_size", "10,5", "--naivexml", "--filter", "1"])
                 
                 hash_files = glob.glob(os.path.join(pair_dir, "hash*.npy"))
                 name_files = glob.glob(os.path.join(pair_dir, "name*.npy"))

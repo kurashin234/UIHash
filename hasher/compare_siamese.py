@@ -210,10 +210,16 @@ def compare_using_siamese(hash_file, name_file, model_path, hash_size_str="8,5,1
                 dst = euc_dist[idx].item()
                 
                 # Filter by Max Distance (if set)
+                # print(f"DEBUG: Sc={sc} Dist={dst} MaxDist={max_dist} Thresh={threshold}") # Debug
                 if max_dist is not None and dst > max_dist:
+                    print(f"DEBUG: SKIPPING due to MaxDist: Dist={dst} > {max_dist}")
                     continue
 
                 if sc > threshold:
+                    p_idx = batch[idx]
+                    results.append((sc, p_idx[0], p_idx[1], dst))
+                else:
+                    print(f"DEBUG: SKIPPING due to Threshold: Sc={sc} <= {threshold}")
                     p_idx = batch[idx]
                     results.append((sc, p_idx[0], p_idx[1], dst))
                     
