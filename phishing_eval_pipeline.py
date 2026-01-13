@@ -389,6 +389,7 @@ def main():
     
     results = []
     
+
     for i, target in enumerate(targets):
         target_name = target.get('target', f'target_{i}')
         legit_url = target.get('legitimate_url')
@@ -396,169 +397,128 @@ def main():
         
         logger.info(f"Processing Target: {target_name}")
         
-        # 1. Crawl/Process Legit
-        legit_id = f"legit_{i}"
+        # === CRAWL LEGIT ===
+        legit_capture_root = join(args.output, "capture", f"legit_{i}")
+        legit_pages = []
         
-        if args.mock_crawl:
-            # Generate dummy data
-            dummy_json = join(capture_dir, f"{legit_id}.json")
-            dummy_png = join(capture_dir, f"{legit_id}.png")
-            if not exists(dummy_json):
-                with open(dummy_json, 'w') as f:
-                     # Minimal Rico JSON
-                     json.dump({"children": []}, f)
-            if not exists(dummy_png):
-                # Black image
-                cv2.imwrite(dummy_png, np.zeros((100, 100, 3), dtype=np.uint8))
-        elif not args.skip_crawl:
-            capture_url(driver, legit_url, capture_dir, legit_id)
+        if not args.skip_crawl:
+             legit_pages = crawl_target(driver, legit_url, legit_capture_root, max_pages=10)
+        else:
+             # If skipping crawl, assume directories exist
+             if exists(legit_capture_root):
+                 legit_pages = [join(legit_capture_root, d) for d in os.listdir(legit_capture_root) if d.startswith('page_')]
         
-        if args.skip_crawl:
-            logger.info("Skipping crawl, using existing data")
+        # Process Legit Hashes
+        legit_hashes = []
+        for p_dir in legit_pages:
+             h = process_page_folder(p_dir, hasher)
+             if h is not None:
+                  try:
+                      h = h.reshape(8, 5, 10)
+                      legit_hashes.append((p_dir, h))
+                  except: pass
         
-        # Process Views and Hash (Tag-Only default)
-        legit_hash = process_capture(capture_dir, legit_id, classifier, hasher, (5, 10), tag_only=True)
-        
-        if legit_hash is not None:
-             # Reshape to (C, H, W) for Siamese model
-             # Output of hasher is (C, H*W). We need (8, 5, 10).
-             try:
-                legit_hash = legit_hash.reshape(8, 5, 10)
-             except Exception as e:
-                logger.error(f"Reshape failed: {e}")
-                legit_hash = None
-        
-        if legit_hash is None:
-            logger.warning(f"Failed to hash legit URL {legit_url}")
-        for i, target in enumerate(targets):
-            target_name = target.get('target', f'target_{i}')
-            legit_url = target.get('legitimate_url')
-            phish_urls = target.get('phishing_urls', [])
-            
-            logger.info(f"Processing Target: {target_name}")
-            
-            # === CRAWL LEGIT ===
-            legit_capture_root = join(args.output, "capture", f"legit_{i}")
-            legit_pages = []
+        if not legit_hashes:
+             logger.warning(f"No valid hashes for legit target {target_name}. Using Dummy if mock.")
+             if args.mock_crawl:
+                 legit_hashes.append(("mock_legit", np.random.rand(8, 5, 10)))
+
+        # === PROCESS PHISHING TARGETS ===
+        for j, p_url in enumerate(target.get('phishing_urls', [])):
+            phish_capture_root = join(args.output, "capture", f"phish_{i}_{j}")
+            phish_pages = []
             
             if not args.skip_crawl:
-                 legit_pages = crawl_target(driver, legit_url, legit_capture_root, max_pages=10)
+                phish_pages = crawl_target(driver, p_url, phish_capture_root, max_pages=10)
             else:
-                 # If skipping crawl, assume directories exist
-                 if exists(legit_capture_root):
-                     legit_pages = [join(legit_capture_root, d) for d in os.listdir(legit_capture_root) if d.startswith('page_')]
+                 if exists(phish_capture_root):
+                     phish_pages = [join(phish_capture_root, d) for d in os.listdir(phish_capture_root) if d.startswith('page_')]
             
-            # Process Legit Hashes
-            legit_hashes = []
-            for p_dir in legit_pages:
-                 h = process_page_folder(p_dir, classifier, hasher, (5, 10), tag_only=True)
-                 if h is not None:
-                      try:
-                          h = h.reshape(8, 5, 10)
-                          legit_hashes.append((p_dir, h))
-                      except: pass
-            
-            if not legit_hashes:
-                 logger.warning(f"No valid hashes for legit target {target_name}. Using Dummy if mock.")
-                 if args.mock_crawl:
-                     legit_hashes.append(("mock_legit", np.random.rand(8, 5, 10)))
-
-            # === PROCESS PHISHING TARGETS ===
-            for j, p_url in enumerate(target.get('phishing_urls', [])):
-                phish_capture_root = join(args.output, "capture", f"phish_{i}_{j}")
-                phish_pages = []
-                
-                if not args.skip_crawl:
-                    phish_pages = crawl_target(driver, p_url, phish_capture_root, max_pages=10)
-                else:
-                     if exists(phish_capture_root):
-                         phish_pages = [join(phish_capture_root, d) for d in os.listdir(phish_capture_root) if d.startswith('page_')]
-                
-                phish_hashes = []
-                for p_dir in phish_pages:
-                    h = process_page_folder(p_dir, classifier, hasher, (5, 10), tag_only=True)
-                    if h is not None:
-                        try:
-                            h = h.reshape(8, 5, 10)
-                            phish_hashes.append((p_dir, h))
-                        except: pass
-                
-                if args.mock_crawl and not phish_hashes:
-                     phish_hashes.append(("mock_phish", np.random.rand(8, 5, 10)))
-                
-                # === CROSS COMPARE ===
-                best_score_cos = -1.0
-                best_score_euc = 9999.0
-                best_pair_paths = (None, None)
-                
-                if not legit_hashes or not phish_hashes:
-                    logger.warning(f"Skipping comparison for {p_url} due to missing data")
-                    continue
-
-                for l_path, l_hash in legit_hashes:
-                    for p_path, p_hash in phish_hashes:
-                        # Siamese Forward
-                        h1 = torch.from_numpy(l_hash).float().unsqueeze(0).to(siamese.device)
-                        h2 = torch.from_numpy(p_hash).float().unsqueeze(0).to(siamese.device)
-                        
-                        with torch.no_grad():
-                            o1, o2 = siamese._forward(h1, h2)
-                            o1 = torch.squeeze(o1, 0)
-                            o2 = torch.squeeze(o2, 0)
-                            
-                            d_cos = torch.cosine_similarity(o1, o2, dim=0)
-                            d_euc = torch.pairwise_distance(o1.unsqueeze(0), o2.unsqueeze(0), p=2)
-                            
-                            sc = d_cos.item()
-                            se = d_euc.item()
-                            
-                            # Logic: We want MAX Cosine Similarity (closest to 1) 
-                            # or MIN Euclidean Distance (closest to 0).
-                            # Usually they correlate. Let's pick based on Cosine.
-                            if sc > best_score_cos:
-                                best_score_cos = sc
-                                best_score_euc = se
-                                best_pair_paths = (l_path, p_path)
-
-                logger.info(f"Best Match {p_url}: Cos={best_score_cos}, Euc={best_score_euc}")
-                
-                # Save Result
-                res_entry = {
-                    'Target': target_name,
-                    'LegitURL': legit_url,
-                    'PhishURL': p_url,
-                    'Score': best_score_cos,
-                    'Euclidean': best_score_euc,
-                    'LegitImg': "see_pairs",
-                    'PhishImg': "see_pairs"
-                }
-                
-                if best_pair_paths[0] and best_pair_paths[1]:
-                    # Copy images to pairs dir and annotate
+            phish_hashes = []
+            for p_dir in phish_pages:
+                h = process_page_folder(p_dir, hasher)
+                if h is not None:
                     try:
-                        l_img_src = join(best_pair_paths[0], "screenshot.png")
-                        p_img_src = join(best_pair_paths[1], "screenshot.png")
-                        
-                        if exists(l_img_src) and exists(p_img_src):
-                            l_img = cv2.imread(l_img_src)
-                            p_img = cv2.imread(p_img_src)
-                            
-                            # Resize to match height
-                            h = min(l_img.shape[0], p_img.shape[0])
-                            l_r = cv2.resize(l_img, (int(l_img.shape[1] * h / l_img.shape[0]), h))
-                            p_r = cv2.resize(p_img, (int(p_img.shape[1] * h / p_img.shape[0]), h))
-                            
-                            combined = np.hstack((l_r, p_r))
-                            cv2.putText(combined, f"Cos: {best_score_cos:.4f} Euc: {best_score_euc:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-                            
-                            pair_filename = f"pair_{i}_{j}.jpg"
-                            cv2.imwrite(join(pairs_dir, pair_filename), combined)
-                            res_entry['LegitImg'] = best_pair_paths[0]
-                            res_entry['PhishImg'] = best_pair_paths[1]
-                    except Exception as e:
-                        logger.error(f"Error saving pair image: {e}")
+                        h = h.reshape(8, 5, 10)
+                        phish_hashes.append((p_dir, h))
+                    except: pass
+            
+            if args.mock_crawl and not phish_hashes:
+                 phish_hashes.append(("mock_phish", np.random.rand(8, 5, 10)))
+            
+            # === CROSS COMPARE ===
+            best_score_cos = -1.0
+            best_score_euc = 9999.0
+            best_pair_paths = (None, None)
+            
+            if not legit_hashes or not phish_hashes:
+                logger.warning(f"Skipping comparison for {p_url} due to missing data")
+                continue
 
-                results.append(res_entry)
+            for l_path, l_hash in legit_hashes:
+                for p_path, p_hash in phish_hashes:
+                    # Siamese Forward
+                    h1 = torch.from_numpy(l_hash).float().unsqueeze(0).to(siamese.device)
+                    h2 = torch.from_numpy(p_hash).float().unsqueeze(0).to(siamese.device)
+                    
+                    with torch.no_grad():
+                        o1, o2 = siamese._forward(h1, h2)
+                        o1 = torch.squeeze(o1, 0)
+                        o2 = torch.squeeze(o2, 0)
+                        
+                        d_cos = torch.cosine_similarity(o1, o2, dim=0)
+                        d_euc = torch.pairwise_distance(o1.unsqueeze(0), o2.unsqueeze(0), p=2)
+                        
+                        sc = d_cos.item()
+                        se = d_euc.item()
+                        
+                        # Logic: We want MAX Cosine Similarity (closest to 1) 
+                        # or MIN Euclidean Distance (closest to 0).
+                        # Usually they correlate. Let's pick based on Cosine.
+                        if sc > best_score_cos:
+                            best_score_cos = sc
+                            best_score_euc = se
+                            best_pair_paths = (l_path, p_path)
+
+            logger.info(f"Best Match {p_url}: Cos={best_score_cos}, Euc={best_score_euc}")
+            
+            # Save Result
+            res_entry = {
+                'Target': target_name,
+                'LegitURL': legit_url,
+                'PhishURL': p_url,
+                'Score': best_score_cos,
+                'Euclidean': best_score_euc,
+                'LegitImg': "see_pairs",
+                'PhishImg': "see_pairs"
+            }
+            
+            if best_pair_paths[0] and best_pair_paths[1]:
+                # Copy images to pairs dir and annotate
+                try:
+                    l_img_src = join(best_pair_paths[0], "screenshot.png")
+                    p_img_src = join(best_pair_paths[1], "screenshot.png")
+                    
+                    if exists(l_img_src) and exists(p_img_src):
+                        l_img = cv2.imread(l_img_src)
+                        p_img = cv2.imread(p_img_src)
+                        
+                        # Resize to match height
+                        h = min(l_img.shape[0], p_img.shape[0])
+                        l_r = cv2.resize(l_img, (int(l_img.shape[1] * h / l_img.shape[0]), h))
+                        p_r = cv2.resize(p_img, (int(p_img.shape[1] * h / p_img.shape[0]), h))
+                        
+                        combined = np.hstack((l_r, p_r))
+                        cv2.putText(combined, f"Cos: {best_score_cos:.4f} Euc: {best_score_euc:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                        
+                        pair_filename = f"pair_{i}_{j}.jpg"
+                        cv2.imwrite(join(pairs_dir, pair_filename), combined)
+                        res_entry['LegitImg'] = best_pair_paths[0]
+                        res_entry['PhishImg'] = best_pair_paths[1]
+                except Exception as e:
+                    logger.error(f"Error saving pair image: {e}")
+
+            results.append(res_entry)
 
     if not args.skip_crawl and not args.mock_crawl and driver:
         driver.quit()
