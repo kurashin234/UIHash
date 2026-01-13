@@ -85,102 +85,36 @@ def setup_driver(headless=True):
         driver = webdriver.Chrome(options=options)
     return driver
 
-def capture_url(driver, url, output_dir, file_prefix):
-    """
-    Visit URL, try to click login, capture screenshot and DOM.
-    Returns path to json and png if successful, else None.
-    """
-    try:
-        logger.info(f"Visiting {url}")
-        driver.get(url)
-        time.sleep(3) # Wait for load
+def scroll_page(driver):
+    """Scroll down 3 times to capture more content."""
+    for _ in range(3):
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(1)
 
-        # Try to find and click login button
-        # Heuristics: search for 'login', 'sign in', 'log in' in text or id/class
-        login_keywords = ['login', 'log in', 'sign in', 'signin', 'acceder', 'connexion']
-        
-        # Simple heuristic: find buttons or links with these words
-        clicked = False
-        start_time = time.time()
-        
-        # We give it a few seconds to find a login button
-        while time.time() - start_time < 5:
-            try:
-                elements = driver.find_elements(By.XPATH, "//button | //a | //input[@type='submit']")
-                target_element = None
-                
-                for el in elements:
-                    if not el.is_displayed():
-                        continue
-                    text = el.text.lower()
-                    val = el.get_attribute('value')
-                    val = val.lower() if val else ""
-                    
-                    if any(k in text for k in login_keywords) or any(k in val for k in login_keywords):
-                        target_element = el
-                        break
-                
-                if target_element:
-                    logger.info(f"Found potential login element: {target_element.text or target_element.get_attribute('value')}")
-                    driver.execute_script("arguments[0].click();", target_element)
-                    clicked = True
-                    time.sleep(3) # Wait for navigation/modal
-                    break
-            except Exception as e:
-                # DOM might have changed
-                pass
-            break # Single pass for now
-            
-        if not clicked:
-            time.sleep(2) # Just wait a bit more if no login found
-
-        # Capture
-        screenshot_path = join(output_dir, f"{file_prefix}.png")
-        driver.save_screenshot(screenshot_path)
-        
-        # Extract DOM elements for Rico format
-        # This is a critical part: we need to convert current DOM to Rico JSON format
-        # [x1, y1, x2, y2, label]
-        # We will use JS to get bounding boxes of visible elements
-        
-        dom_script = """
-        var all = document.getElementsByTagName("*");
-        var elements = [];
-        for (var i=0, max=all.length; i < max; i++) {
-            var el = all[i];
-            var rect = el.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-                // Check visibility
-                var style = window.getComputedStyle(el);
-                if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
-                    // Approximate 'label' or 'class' - for UIHash we often map tag+class or just tag
-                    // Rico uses 'componentLabel'. We can use tag name or try to map standard UI elements.
-                    var label = el.tagName;
-                    
-                    // Simple mapping to Android-like classes if possible, or just raw
-                    // Reclass model expects images, so the label here is mostly for grouping?
-                    // Actually extract_view_images.py uses 'componentLabel' to name the folder.
-                    // IMPORTANT: The reclass model is trained on specific class names (e.g., Button, TextView).
-                    // But typically we just need *some* label to segregate crops. The reclassifier will decide the REAL class.
-                    // So distinct ID is enough.
-                    
-                     elements.push({
-                        "bounds": [rect.left, rect.top, rect.right, rect.bottom],
-                        "componentLabel": label + "_" + i,
-                        "children": [] 
-                    });
-                }
+def extract_dom_to_rico(driver, output_dir, file_prefix):
+    """Extract DOM and save as Rico JSON."""
+    dom_script = """
+    var all = document.getElementsByTagName("*");
+    var elements = [];
+    for (var i=0, max=all.length; i < max; i++) {
+        var el = all[i];
+        var rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+            var style = window.getComputedStyle(el);
+            if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+                var label = el.tagName;
+                 elements.push({
+                    "bounds": [rect.left, rect.top, rect.right, rect.bottom],
+                    "componentLabel": label + "_" + i,
+                    "children": [] 
+                });
             }
         }
-        return elements;
-        """
-        # Note: The above JS is very naive. Real Rico JSON is hierarchical.
-        # But extract_view_images.py -> read_rico_json_nodes just recursively finds "componentLabel" and "bounds".
-        # So a flat list wrapped in a root object is fine if we structure it right.
-        
-        # Actually flat list is easier to generate.
+    }
+    return elements;
+    """
+    try:
         elements = driver.execute_script(dom_script)
-        
         rico_json = {
             "activity": {
                 "root": {
@@ -188,129 +122,169 @@ def capture_url(driver, url, output_dir, file_prefix):
                 }
             }
         }
-        
-        # Wrap to match read_rico_json_nodes expectations
-        # It expects a dict 'o'. 
-        # If 'children' in o, recurse.
-        # If 'componentLabel' in o, add.
-        # So passing 'rico_json["activity"]["root"]' to the saver.
-        
         json_path = join(output_dir, f"{file_prefix}.json")
         with open(json_path, 'w') as f:
             json.dump(rico_json["activity"]["root"], f)
-            
-        return json_path, screenshot_path
-
+        return json_path
     except Exception as e:
-        logger.error(f"Error capturing {url}: {e}")
-        return None, None
+        logger.error(f"DOM extraction failed: {e}")
+        return None
 
-def process_capture(capture_dir, screen_name, classifier, hasher, hash_grid_size, tag_only=True):
+def crawl_target(driver, start_url, output_root, max_pages=10):
     """
-    1. Extract view images from capture (Virtual/In-Memory)
-    2. Reclassify views (Tag-based or CNN)
-    3. Generate UIHash
+    Crawl up to max_pages from start_url.
+    Prioritize login links.
+    Save each page to output_root/page_N/
     """
-    json_path = join(capture_dir, f"{screen_name}.json")
-    png_path = join(capture_dir, f"{screen_name}.png")
+    logger.info(f"Crawling target: {start_url} (Max {max_pages} pages)")
+    
+    visited_urls = set()
+    queue = [start_url]
+    pages_captured = 0
+    
+    # Store captured page paths
+    captured_pages = []
+    
+    while queue and pages_captured < max_pages:
+        url = queue.pop(0)
+        if url in visited_urls:
+            continue
+        visited_urls.add(url)
+        
+        try:
+            logger.info(f"Visiting ({pages_captured+1}/{max_pages}): {url}")
+            driver.get(url)
+            time.sleep(3)
+            
+            # Scroll
+            scroll_page(driver)
+            time.sleep(1)
+            
+            # Setup Page Directory
+            page_dir = join(output_root, f"page_{pages_captured}")
+            if not exists(page_dir):
+                makedirs(page_dir)
+            
+            # Capture
+            screenshot_path = join(page_dir, "screenshot.png")
+            driver.save_screenshot(screenshot_path)
+            json_path = extract_dom_to_rico(driver, page_dir, "view_hierarchy") # Standard name inside page dir
+            
+            if json_path and exists(screenshot_path):
+                 captured_pages.append(page_dir)
+                 pages_captured += 1
+            
+            # Collect Links for next steps
+            if pages_captured < max_pages:
+                try:
+                    elems = driver.find_elements(By.TAG_NAME, "a")
+                    new_links = []
+                    for el in elems:
+                        href = el.get_attribute("href")
+                        if href and href.startswith("http") and href not in visited_urls:
+                            # Prioritize Login
+                            if any(k in href.lower() or (el.text and k in el.text.lower()) for k in ['login', 'sign in', 'signin', 'account']):
+                                queue.insert(0, href) # BFS Priority
+                            else:
+                                new_links.append(href)
+                    
+                    # Add non-priority links to end (BFS)
+                    # Shuffle new_links for randomness? User said "random"
+                    import random
+                    random.shuffle(new_links)
+                    queue.extend(new_links)
+                    
+                except Exception as e:
+                    logger.warning(f"Link extraction error: {e}")
+
+        except Exception as e:
+            logger.error(f"Error crawling {url}: {e}")
+    
+    return captured_pages
+
+def process_page_folder(page_dir, hasher):
+    """
+    Process a single page directory:
+    1. Read view_hierarchy.json
+    2. Generate classify.txt based on Tags (no images)
+    3. Calculate Hash using classify.txt (Nodes2Hash)
+    """
+    json_path = join(page_dir, "view_hierarchy.json")
+    png_path = join(page_dir, "screenshot.png")
     
     if not exists(json_path) or not exists(png_path):
         return None
-        
-    views_dir = join(capture_dir, screen_name)
-    # Only create views dir if we really need to (CNN mode) or for debug?
-    # User complained about "extract_view_images", so let's avoid it in tag-only mode if possible.
-    if not tag_only and not exists(views_dir):
-        makedirs(views_dir)
-        
+
     try:
+        # Load JSON
         with open(json_path, 'r') as f:
             jo = json.load(f)
-        
-        # Load image (needed for CNN or just general info)
-        # Nodes2Hash gen_uihash will load it independently too.
-        # But we need dimensions for clipping 'views' coordinates generated by read_rico_json_nodes.
-        img = cv2.imread(png_path)
-        if img is None: return None
-        h, w, _ = img.shape
-
+            
+        # Extract Views
         views = []
         read_rico_json_nodes(views, jo)
         
-        nodes_for_hash = []
-        m = 0
+        # Generate classify.txt content
+        # Format: {"0_tag": class_id, "1_tag": class_id, ...}
+        classify_dict = {}
         
-        if not tag_only:
-            classifier.net.eval() # Set classifier to eval mode once
-
-        for n in views:
+        nodes_for_hash = []
+        
+        # We need image dims for clipping
+        img = cv2.imread(png_path)
+        if img is None: return None
+        h, w, _ = img.shape
+        
+        for idx, n in enumerate(views):
             w1, h1, w2, h2, label_raw = n
             w1, h1, w2, h2 = int(w1), int(h1), int(w2), int(h2)
             
             w1, w2 = max(0, min(w1, w)), max(0, min(w2, w))
             h1, h2 = max(0, min(h1, h)), max(0, min(h2, h))
-            
+             
             if w2 <= w1+1 or h2 <= h1+1: continue
             
-            pred_id = -1
+            # Tag Logic
+            tag_name = label_raw.split('_')[0].lower()
+            pred_id = TAG_MAP.get(tag_name, 7) # Default Other
             
-            if tag_only:
-                # Use TAG_MAP logic (Naive)
-                # label_raw comes from 'componentLabel' in JSON, which we set to 'tagName_index' or just 'tagName' (plus index suffix)
-                # In capture_url, we set: "componentLabel": label + "_" + i (where label is el.tagName)
-                # So we split by '_'
-                tag_name = label_raw.split('_')[0].lower()
-                pred_id = TAG_MAP.get(tag_name, 7) # Default to 7 (Other)
-            else:
-                 # CNN Logic
-                 crop = img[h1:h2, w1:w2]
-                 if crop.size == 0: continue
-                 
-                 view_filename = f"{m}.jpg"
-                 cv2.imwrite(join(views_dir, view_filename), crop)
-                 
-                 # Prepare for prediction
-                 # (Preprocessing logic...)
-                 try:
-                     crop_resized = cv2.resize(crop, (28, 28))
-                     crop_gray = cv2.cvtColor(crop_resized, cv2.COLOR_BGR2GRAY)
-                     crop_t = torch.from_numpy(crop_gray).float().unsqueeze(0).unsqueeze(0).to(classifier.device)
-                     
-                     with torch.no_grad():
-                        out = classifier.net(crop_t)
-                        prob = torch.nn.functional.softmax(out, dim=1)
-                        max_val, max_idx = torch.max(prob, 1)
-                        if max_val.item() > classifier.confidence_threshold:
-                            # Map Dataset ID to UIHash ID
-                            # Dataset: 0:button, 1:img, 2:input, 3:text
-                            # UIHash:  0:button, 7:img, 2:input, 5:text
-                            label_map = {0: 0, 1: 7, 2: 2, 3: 5}
-                            pred_id = label_map.get(max_idx.item(), -1)
-                 except Exception as e:
-                     logger.warning(f"Reclass error for view {m}: {e}")
-                     pass
-
-            # Only add if valid (or handle -1 in Nodes2Hash if we want?)
-            # Nodes2Hash handles -1 as fallback logic (class name matching).
-            # But here we have explicit ID.
+            # Add to classify dict
+            # Key format used by Nodes2Hash typically: "{index}_{class}" or just unique string?
+            # Looking at Nodes2Hash: key.split('_', 1) -> index, original_type
+            # So key should be f"{idx}_{label_raw}"
+            # And value should be pred_id
+            
+            key = f"{idx}_{label_raw}"
+            classify_dict[key] = pred_id
+            
+            # We also need to construct nodes list for hashing or let Nodes2Hash read the file
+            # If we create classify.txt, Nodes2Hash can read it.
+            # But we can also pass 'nodes' explicitly with 'name' set to predicted ID to skip file read/parsing if we want.
+            # However, user explicitly asked to "generate classify.txt file".
             
             nodes_for_hash.append({
-                'name': pred_id if pred_id != -1 else label_raw, # Pass ID if found, else raw label
+                'name': str(pred_id), # Pass ID string as name, our patched Nodes2Hash handles this
                 'lt': (w1, h1),
                 'rb': (w2, h2)
             })
-            m += 1
-
-        # 3. Generate Hash
-        # We modified Nodes2Hash to accept 'name' as int ID.
+            
+        # Save classify.txt
+        classify_path = join(page_dir, "classify.txt")
+        with open(classify_path, 'w') as f:
+            f.write(str(classify_dict))
+            
+        # Generate Hash
+        # We pass nodes_for_hash so it doesn't need to re-parse.
+        # And since we patched Nodes2Hash to allow missing classify.txt if names are int,
+        # OR if classify.txt exists it uses it.
+        # Since we just wrote classify.txt, standard logic works too.
+        # But passing nodes is faster.
         hash_vec = hasher.gen_uihash(json_path, nodes_for_hash)
         
         return hash_vec
 
     except Exception as e:
-        logger.error(f"Error processing {screen_name}: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error processing {page_dir}: {e}")
         return None
 
 def main():
@@ -456,107 +430,135 @@ def main():
         
         if legit_hash is None:
             logger.warning(f"Failed to hash legit URL {legit_url}")
-            # If mocking, maybe we failed because empty json?
-            # process_capture needs valid json structure.
-            # Let's handle mock case in process_capture or make mock data better?
-            # actually if children is empty, views is empty -> hash is None?
-            # Hasher returns None if no nodes?
-            # Nodes2Hash gen_uihash:
-            # nodes = ...
-            # if len(nodes) < filter_few_nodes (default 5? no we init hasher with default?)
-            # Nodes2Hash(grid_size, type_num)
-            # gen_uihash(xml_path, nodes)
-            # It checks filter? No, gen_uihash calls helper. 
-            # In uihash.py, it checked filter. In my script I didn't check filter explicitly but process_capture does extraction.
-            # If views is empty, nodes_for_hash is empty.
-            # gen_uihash might fail or return zero hash.
-            # Let's trust it returns something or None.
-            pass
-
-        # For Mocking, legit_hash might be None if mock data is too simple.
-        # Let's force a dummy hash for mock if needed?
-        if args.mock_crawl and legit_hash is None:
-             legit_hash = np.random.rand(8, 5, 10) # Dummy hash
-
-        if legit_hash is None: 
-             continue
-
-        # 2. Process Phishing
-        for j, p_url in enumerate(phish_urls):
-            phish_id = f"phish_{i}_{j}"
+        for i, target in enumerate(targets):
+            target_name = target.get('target', f'target_{i}')
+            legit_url = target.get('legitimate_url')
+            phish_urls = target.get('phishing_urls', [])
             
-            if args.mock_crawl:
-                dummy_json = join(capture_dir, f"{phish_id}.json")
-                dummy_png = join(capture_dir, f"{phish_id}.png")
-                with open(dummy_json, 'w') as f: json.dump({"children": []}, f)
-                cv2.imwrite(dummy_png, np.zeros((100, 100, 3), dtype=np.uint8))
-            elif not args.skip_crawl:
-                capture_url(driver, p_url, capture_dir, phish_id)
+            logger.info(f"Processing Target: {target_name}")
             
-            phish_hash = process_capture(capture_dir, phish_id, classifier, hasher, (5, 10), tag_only=True)
+            # === CRAWL LEGIT ===
+            legit_capture_root = join(args.output, "capture", f"legit_{i}")
+            legit_pages = []
             
-            if args.mock_crawl and phish_hash is None:
-                phish_hash = np.random.rand(8, 5, 10)
+            if not args.skip_crawl:
+                 legit_pages = crawl_target(driver, legit_url, legit_capture_root, max_pages=10)
+            else:
+                 # If skipping crawl, assume directories exist
+                 if exists(legit_capture_root):
+                     legit_pages = [join(legit_capture_root, d) for d in os.listdir(legit_capture_root) if d.startswith('page_')]
             
-            if phish_hash is not None and phish_hash.ndim == 2:
-                 try:
-                    phish_hash = phish_hash.reshape(8, 5, 10)
-                 except:
-                    phish_hash = None
+            # Process Legit Hashes
+            legit_hashes = []
+            for p_dir in legit_pages:
+                 h = process_page_folder(p_dir, classifier, hasher, (5, 10), tag_only=True)
+                 if h is not None:
+                      try:
+                          h = h.reshape(8, 5, 10)
+                          legit_hashes.append((p_dir, h))
+                      except: pass
+            
+            if not legit_hashes:
+                 logger.warning(f"No valid hashes for legit target {target_name}. Using Dummy if mock.")
+                 if args.mock_crawl:
+                     legit_hashes.append(("mock_legit", np.random.rand(8, 5, 10)))
 
-
-            score_cos = 0.0
-            score_euc = 0.0
-            if phish_hash is not None:
-                # Score
-                # Siamese deal_data expects: (i1, i2, label)
-                # But we just want distance.
-                # Siamese._forward(i1, i2)
+            # === PROCESS PHISHING TARGETS ===
+            for j, p_url in enumerate(target.get('phishing_urls', [])):
+                phish_capture_root = join(args.output, "capture", f"phish_{i}_{j}")
+                phish_pages = []
                 
-                # Prepare tensors
-                # Hash shape: (channels, h, w) -> (10, 5, 10)
-                # Model expects batch: (Batch, C, H, W)
+                if not args.skip_crawl:
+                    phish_pages = crawl_target(driver, p_url, phish_capture_root, max_pages=10)
+                else:
+                     if exists(phish_capture_root):
+                         phish_pages = [join(phish_capture_root, d) for d in os.listdir(phish_capture_root) if d.startswith('page_')]
                 
-                h1 = torch.from_numpy(legit_hash).float().unsqueeze(0).to(siamese.device)
-                h2 = torch.from_numpy(phish_hash).float().unsqueeze(0).to(siamese.device)
+                phish_hashes = []
+                for p_dir in phish_pages:
+                    h = process_page_folder(p_dir, classifier, hasher, (5, 10), tag_only=True)
+                    if h is not None:
+                        try:
+                            h = h.reshape(8, 5, 10)
+                            phish_hashes.append((p_dir, h))
+                        except: pass
                 
-                with torch.no_grad():
-                    o1, o2 = siamese._forward(h1, h2)
-                    o1 = torch.squeeze(o1, 0)
-                    o2 = torch.squeeze(o2, 0)
-                    distance_cos = torch.cosine_similarity(o1, o2, dim=1) # Compute similarity across features (dim 1)
-                    distance_euc = torch.pairwise_distance(o1, o2, p=2) 
-                    
-                    score_cos = distance_cos.item()
-                    score_euc = distance_euc.item()
-            
-            logger.info(f"Score {p_url}: Cos={score_cos}, Euc={score_euc}")
-            results.append({
-                'Target': target_name,
-                'LegitURL': legit_url,
-                'PhishURL': p_url,
-                'Score': score_cos,
-                'Euclidean': score_euc,
-                'LegitImg': f"{legit_id}.png",
-                'PhishImg': f"{phish_id}.png"
-            })
-            
-            # Save Pair Image
-            l_img_p = join(capture_dir, f"{legit_id}.png")
-            p_img_p = join(capture_dir, f"{phish_id}.png")
-            if exists(l_img_p) and exists(p_img_p):
-                l_img = cv2.imread(l_img_p)
-                p_img = cv2.imread(p_img_p)
-                # Resize to same height for display
-                h = min(l_img.shape[0], p_img.shape[0])
-                if h > 0:
-                    l_r = cv2.resize(l_img, (int(l_img.shape[1] * h / l_img.shape[0]), h))
-                    p_r = cv2.resize(p_img, (int(p_img.shape[1] * h / p_img.shape[0]), h))
-                    combined = np.hstack((l_r, p_r))
-                    
-                    # Annotate
-                    cv2.putText(combined, f"Cos: {score_cos:.4f} Euc: {score_euc:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-                    cv2.imwrite(join(pairs_dir, f"pair_{i}_{j}.jpg"), combined)
+                if args.mock_crawl and not phish_hashes:
+                     phish_hashes.append(("mock_phish", np.random.rand(8, 5, 10)))
+                
+                # === CROSS COMPARE ===
+                best_score_cos = -1.0
+                best_score_euc = 9999.0
+                best_pair_paths = (None, None)
+                
+                if not legit_hashes or not phish_hashes:
+                    logger.warning(f"Skipping comparison for {p_url} due to missing data")
+                    continue
+
+                for l_path, l_hash in legit_hashes:
+                    for p_path, p_hash in phish_hashes:
+                        # Siamese Forward
+                        h1 = torch.from_numpy(l_hash).float().unsqueeze(0).to(siamese.device)
+                        h2 = torch.from_numpy(p_hash).float().unsqueeze(0).to(siamese.device)
+                        
+                        with torch.no_grad():
+                            o1, o2 = siamese._forward(h1, h2)
+                            o1 = torch.squeeze(o1, 0)
+                            o2 = torch.squeeze(o2, 0)
+                            
+                            d_cos = torch.cosine_similarity(o1, o2, dim=0)
+                            d_euc = torch.pairwise_distance(o1.unsqueeze(0), o2.unsqueeze(0), p=2)
+                            
+                            sc = d_cos.item()
+                            se = d_euc.item()
+                            
+                            # Logic: We want MAX Cosine Similarity (closest to 1) 
+                            # or MIN Euclidean Distance (closest to 0).
+                            # Usually they correlate. Let's pick based on Cosine.
+                            if sc > best_score_cos:
+                                best_score_cos = sc
+                                best_score_euc = se
+                                best_pair_paths = (l_path, p_path)
+
+                logger.info(f"Best Match {p_url}: Cos={best_score_cos}, Euc={best_score_euc}")
+                
+                # Save Result
+                res_entry = {
+                    'Target': target_name,
+                    'LegitURL': legit_url,
+                    'PhishURL': p_url,
+                    'Score': best_score_cos,
+                    'Euclidean': best_score_euc,
+                    'LegitImg': "see_pairs",
+                    'PhishImg': "see_pairs"
+                }
+                
+                if best_pair_paths[0] and best_pair_paths[1]:
+                    # Copy images to pairs dir and annotate
+                    try:
+                        l_img_src = join(best_pair_paths[0], "screenshot.png")
+                        p_img_src = join(best_pair_paths[1], "screenshot.png")
+                        
+                        if exists(l_img_src) and exists(p_img_src):
+                            l_img = cv2.imread(l_img_src)
+                            p_img = cv2.imread(p_img_src)
+                            
+                            # Resize to match height
+                            h = min(l_img.shape[0], p_img.shape[0])
+                            l_r = cv2.resize(l_img, (int(l_img.shape[1] * h / l_img.shape[0]), h))
+                            p_r = cv2.resize(p_img, (int(p_img.shape[1] * h / p_img.shape[0]), h))
+                            
+                            combined = np.hstack((l_r, p_r))
+                            cv2.putText(combined, f"Cos: {best_score_cos:.4f} Euc: {best_score_euc:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                            
+                            pair_filename = f"pair_{i}_{j}.jpg"
+                            cv2.imwrite(join(pairs_dir, pair_filename), combined)
+                            res_entry['LegitImg'] = best_pair_paths[0]
+                            res_entry['PhishImg'] = best_pair_paths[1]
+                    except Exception as e:
+                        logger.error(f"Error saving pair image: {e}")
+
+                results.append(res_entry)
 
     if not args.skip_crawl and not args.mock_crawl and driver:
         driver.quit()
