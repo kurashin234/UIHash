@@ -219,16 +219,16 @@ class Nodes2Hash:
             # Try Web path (same directory as json/xml)
             type_file = join(os.path.dirname(xml_path), "classify.txt")
             
-        if not os.path.exists(type_file):
-             print(f"DEBUG: classify.txt not found for {xml_path}. Checked: {type_file}", flush=True)
-             return None
+        if os.path.exists(type_file):
+             with open(type_file, mode='r') as f:
+                 raw_type_dict = eval(f.readline())
+             for key in raw_type_dict:
+                 index, original_type = key.split('_', 1)
+                 reidentified_type = raw_type_dict[key]
+                 type_dict[index] = (original_type, reidentified_type)
+        else:
+             print(f"DEBUG: classify.txt not found. Using node 'name' as type ID if integer.", flush=True)
 
-        with open(type_file, mode='r') as f:
-            raw_type_dict = eval(f.readline())
-        for key in raw_type_dict:
-            index, original_type = key.split('_', 1)
-            reidentified_type = raw_type_dict[key]
-            type_dict[index] = (original_type, reidentified_type)
         for i, n in enumerate(nodes):
             if "area4grids" not in n:
                 continue
@@ -238,7 +238,16 @@ class Nodes2Hash:
             if str(i) in type_dict:
                 ori_type, _c = type_dict[str(i)]
             else:
-                continue
+                # Fallback: if 'name' is already an integer string (from our pipeline), use it
+                try:
+                    _c = int(ori_type)
+                except:
+                    pass
+                if _c == -1: # Still not found
+                     # If generic pipeline, maybe continue or fallback
+                     # continue
+                     pass
+
             if _c < 0:
                 # use the declared class name instead
                 if "RadioB" in ori_type:
