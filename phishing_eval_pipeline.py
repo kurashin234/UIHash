@@ -243,6 +243,9 @@ def process_capture(capture_dir, screen_name, classifier, hasher, hash_grid_size
         
         for n in views:
             w1, h1, w2, h2, label_raw = n
+            # Cast keys to int
+            w1, h1, w2, h2 = int(w1), int(h1), int(w2), int(h2)
+            
             # Clip
             w1, w2 = max(0, min(w1, w)), max(0, min(w2, w))
             h1, h2 = max(0, min(h1, h)), max(0, min(h2, h))
