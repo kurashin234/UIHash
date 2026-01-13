@@ -394,6 +394,7 @@ def main():
         classifier = ImgClassifier(dataset_path, epoch=30, batch_size=128, confidence_threshold=0.95)
         logger.info(f"Loading reclass model from {model_path}")
         classifier.net.load_state_dict(state)
+        classifier.net.to('cpu')
     finally:
         reclass.ImgDataSet = original_dataset_cls # Restore
 
@@ -413,7 +414,8 @@ def main():
     siamese = SiameseModel(hash_size=(8, 5, 10), epoch=30, batch_size=32, load_labelled_dataset=False)
     if exists(siamese_model_path):
         logger.info(f"Loading siamese model from {siamese_model_path}")
-        siamese.net.load_state_dict(torch.load(siamese_model_path, map_location=siamese.device))
+        siamese.net.load_state_dict(torch.load(siamese_model_path, map_location='cpu'))
+        siamese.net.to('cpu')
         siamese.net.eval()
     else:
         logger.error("Siamese model not found!")

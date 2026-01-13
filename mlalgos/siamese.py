@@ -42,10 +42,8 @@ class SiameseModel:
             binary_loss: bool = False,
             retrain_model: bool = False,
             load_labelled_dataset: bool = True):
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda", 0)
-        else:
-            self.device = torch.device("cpu")
+        # Force CPU to avoid CUDA mismatches on older GPUs (like GTX 1080 with new PyTorch)
+        self.device = torch.device("cpu")
         print(f'DEVICE: {self.device}')
         self.epoch = epoch
         self.binary_loss = binary_loss

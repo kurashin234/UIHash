@@ -129,8 +129,8 @@ class ImgClassifier:
             confidence_threshold (float): The confidence to take the
               predicted label
         """
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
+        # Force CPU to avoid CUDA mismatches
+        self.device = torch.device("cpu")
         print(f"DEVICE: {self.device}")
         self.epoch = epoch
         self.batch_size = batch_size
