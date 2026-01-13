@@ -163,7 +163,7 @@ def capture_url(driver, url, output_dir, file_prefix):
                     // But typically we just need *some* label to segregate crops. The reclassifier will decide the REAL class.
                     // So distinct ID is enough.
                     
-                     elements.append({
+                     elements.push({
                         "bounds": [rect.left, rect.top, rect.right, rect.bottom],
                         "componentLabel": label + "_" + i,
                         "children": [] 
