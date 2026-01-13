@@ -423,7 +423,9 @@ def main():
 
     # Hasher
     # We must match Siamese input channels (8) even if classifier has fewer classes
-    hasher = Nodes2Hash((5, 10), 8)
+    # Siamese model expects 5x10 (HxW). So we need Nodes2Hash to produce W=10, H=5.
+    # Nodes2Hash args are (h_tick, v_tick) -> (10, 5)
+    hasher = Nodes2Hash((10, 5), 8)
     
     results = []
     
@@ -452,6 +454,15 @@ def main():
             capture_url(driver, legit_url, capture_dir, legit_id)
         
         legit_hash = process_capture(capture_dir, legit_id, classifier, hasher, (5, 10))
+        
+        if legit_hash is not None:
+             # Reshape to (C, H, W) for Siamese model
+             # Output of hasher is (C, H*W). We need (8, 5, 10).
+             try:
+                legit_hash = legit_hash.reshape(8, 5, 10)
+             except Exception as e:
+                logger.error(f"Reshape failed: {e}")
+                legit_hash = None
         
         if legit_hash is None:
             logger.warning(f"Failed to hash legit URL {legit_url}")
@@ -496,6 +507,13 @@ def main():
             
             if args.mock_crawl and phish_hash is None:
                 phish_hash = np.random.rand(8, 5, 10)
+            
+            if phish_hash is not None and phish_hash.ndim == 2:
+                 try:
+                    phish_hash = phish_hash.reshape(8, 5, 10)
+                 except:
+                    phish_hash = None
+
 
             score_cos = 0.0
             score_euc = 0.0
