@@ -194,11 +194,13 @@ def evaluate(input_file, output_dir, start_index=0, max_count=None):
                     "--hash_size", "8,10,5",
                     "--top", "100",  # Get more results to find best match
                     "--cross",
-                    "--threshold", "-2.0"  # No threshold
+                    "--threshold", "-2.0",  # No threshold
+                    "--max_dist", "100.0"  # No distance filtering
                 ]
                 
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 print(result.stdout)
+
 
                 # Parse results and find best match
                 pattern = r"(\d+)\. Score: ([\d\.\-]+) \(Dist: ([\d\.\-]+)\)\s+A: (.+)\s+B: (.+)"
@@ -211,11 +213,34 @@ def evaluate(input_file, output_dir, start_index=0, max_count=None):
                         writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (No Results)", "", ""])
                     continue
 
-                # Find best match: highest score, lowest distance
+                # Filter for legit vs phish pairs only (exclude legit vs legit and phish vs phish)
+                cross_site_matches = []
+                for rank, score, distance, file_a, file_b in matches:
+                    # Check if one is from legit and the other from phish
+                    is_a_legit = file_a.strip().startswith('legit')
+                    is_b_legit = file_b.strip().startswith('legit')
+                    is_a_phish = file_a.strip().startswith('phish')
+                    is_b_phish = file_b.strip().startswith('phish')
+                    
+                    # Only include if one is legit and the other is phish
+                    if (is_a_legit and is_b_phish) or (is_a_phish and is_b_legit):
+                        cross_site_matches.append((rank, score, distance, file_a, file_b))
+                
+                if not cross_site_matches:
+                    print("WARNING: No cross-site (legit vs phish) comparison results found!")
+                    with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
+                        writer = csv.writer(csvfile)
+                        writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (No Cross-Site Results)", "", ""])
+                    continue
+                
+                # Find best match from cross-site pairs: highest score, lowest distance
                 # Sort by score DESC, then distance ASC
-                best_match = sorted(matches, key=lambda x: (-float(x[1]), float(x[2])))[0]
+                best_match = sorted(cross_site_matches, key=lambda x: (-float(x[1]), float(x[2])))[0]
                 
                 rank, score, distance, file_a, file_b = best_match
+                
+                print(f"\n>>> Best cross-site match: Score={score}, Distance={distance}")
+                print(f"    {file_a.strip()} <-> {file_b.strip()}")
                 
                 # Save to CSV
                 with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
