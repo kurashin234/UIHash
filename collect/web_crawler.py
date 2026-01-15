@@ -20,7 +20,7 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
 class WebCrawler:
-    def __init__(self, headless=False, max_pages=10, max_scrolls=3, random_mode=False):
+    def __init__(self, headless=False, max_pages=10, max_scrolls=3, random_mode=False, login_priority=False):
         options = Options()
         if headless:
             options.add_argument('--headless')
@@ -47,16 +47,15 @@ class WebCrawler:
         self.visited_urls = set()
         self.queue = deque()
         self.random_mode = random_mode
+        self.login_priority = login_priority
 
     def crawl(self, start_url: str, output_dir: str):
         """
         Crawl a site starting from start_url.
         """
         self.start_domain = urlparse(start_url).netloc
-        # Create domain-specific output directory
-        timestamp = int(time.time())
-        site_dirname = f"{self.start_domain.replace('.', '_')}_{timestamp}"
-        self.site_output_dir = os.path.join(output_dir, site_dirname)
+        # Save directly to output_dir (no subdirectory)
+        self.site_output_dir = output_dir
         
         # Reset state for new domain
         self.queue.clear()
@@ -91,7 +90,8 @@ class WebCrawler:
                     continue
 
                 # Process the page (scroll and capture)
-                self._process_page(url)
+                # Only try login on first page
+                self._process_page(url, is_first_page=(pages_crawled == 0))
                 
                 # Find new links
                 self._extract_links(url)
@@ -100,10 +100,15 @@ class WebCrawler:
             except Exception as e:
                 print(f"Error crawling {url}: {e}")
 
-    def _process_page(self, url):
+    def _process_page(self, url, is_first_page=False):
         """
         Capture screenshots and DOM while scrolling.
         """
+        # Try to click login button first if enabled (only on first page)
+        if self.login_priority and is_first_page:
+            self._try_click_login_button()
+            time.sleep(2)  # Wait for potential redirect after login click
+        
         scroll_height = self.driver.execute_script("return document.body.scrollHeight")
         viewport_height = self.driver.execute_script("return window.innerHeight")
         
@@ -154,9 +159,23 @@ class WebCrawler:
                 parsed = urlparse(href)
                 
                 # Check domain and visited
-                if parsed.netloc == self.start_domain and href not in self.visited_urls:
-                    self.visited_urls.add(href)
-                    new_links.append(href)
+                # Allow same domain with different subdomains (e.g., amazon.co.jp and www.amazon.co.jp)
+                if parsed.netloc:
+                    # Extract base domain (e.g., amazon.co.jp from www.amazon.co.jp)
+                    parsed_domain_parts = parsed.netloc.split('.')
+                    start_domain_parts = self.start_domain.split('.')
+                    
+                    # Match if the last 2 parts are the same (e.g., amazon.co.jp)
+                    # or if they are exactly the same
+                    is_same_domain = (
+                        parsed.netloc == self.start_domain or
+                        (len(parsed_domain_parts) >= 2 and len(start_domain_parts) >= 2 and
+                         '.'.join(parsed_domain_parts[-2:]) == '.'.join(start_domain_parts[-2:]))
+                    )
+                    
+                    if is_same_domain and href not in self.visited_urls:
+                        self.visited_urls.add(href)
+                        new_links.append(href)
             
             # Randomize order if enabled
             if self.random_mode:
@@ -227,6 +246,48 @@ class WebCrawler:
         """
         return self.driver.execute_script(js_script)
 
+    def _try_click_login_button(self):
+        """
+        Try to find and click login/signin buttons.
+        """
+        try:
+            # Keywords to search for (case-insensitive)
+            login_keywords = ['login', 'log in', 'signin', 'sign in', 'ログイン', 'サインイン']
+            
+            # Search in buttons, links, and clickable elements
+            clickable_elements = self.driver.find_elements(By.XPATH, 
+                "//button | //a | //input[@type='button'] | //input[@type='submit'] | //div[@role='button']")
+            
+            for elem in clickable_elements:
+                try:
+                    # Check text content
+                    text = elem.text.lower().strip()
+                    # Check aria-label
+                    aria_label = elem.get_attribute('aria-label')
+                    if aria_label:
+                        aria_label = aria_label.lower().strip()
+                    # Check value attribute (for inputs)
+                    value = elem.get_attribute('value')
+                    if value:
+                        value = value.lower().strip()
+                    
+                    # Check if any keyword matches
+                    for keyword in login_keywords:
+                        if (keyword in text or 
+                            (aria_label and keyword in aria_label) or 
+                            (value and keyword in value)):
+                            print(f"  Found login button: '{text or aria_label or value}' - clicking...")
+                            elem.click()
+                            time.sleep(2)  # Wait for potential page load/modal
+                            return  # Click only the first match
+                except Exception as e:
+                    # Element might be stale or not clickable, continue
+                    continue
+            
+            print("  No login button found.")
+        except Exception as e:
+            print(f"  Error in login button detection: {e}")
+ 
     def _is_accessible(self, url):
         """
         Check if URL is accessible via generic HTTP request.
@@ -261,10 +322,11 @@ if __name__ == "__main__":
     parser.add_argument("--pages", type=int, default=10, help="Max pages to crawl per URL")
     parser.add_argument("--scrolls", type=int, default=3, help="Max scrolls per page")
     parser.add_argument("--random", action="store_true", help="Randomize link traversal order")
+    parser.add_argument("--login-priority", action="store_true", help="Prioritize clicking login/signin buttons")
     
     args = parser.parse_args()
     
-    crawler = WebCrawler(headless=args.headless, max_pages=args.pages, max_scrolls=args.scrolls, random_mode=args.random)
+    crawler = WebCrawler(headless=args.headless, max_pages=args.pages, max_scrolls=args.scrolls, random_mode=args.random, login_priority=args.login_priority)
     try:
         for url in args.urls:
             # Check if it's a local file

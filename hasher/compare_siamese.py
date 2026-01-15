@@ -224,9 +224,10 @@ def compare_using_siamese(hash_file, name_file, model_path, hash_size_str="8,5,1
                     p_idx = batch[idx]
                     results.append((sc, p_idx[0], p_idx[1], dst))
                 else:
-                    print(f"DEBUG: SKIPPING due to Threshold: Sc={sc} <= {threshold}")
-                    p_idx = batch[idx]
-                    results.append((sc, p_idx[0], p_idx[1], dst))
+                    # Even if below threshold, we might want to see it if debugging, 
+                    # but typically we only care about matches.
+                    # However, evaluate_pairs sets threshold to -2.0, so everything is > threshold.
+                    pass
                     
             if k % 1000 == 0 and k > 0:
                 print(f"Processed {k} pairs...")

@@ -3,67 +3,65 @@ import json
 import csv
 import sys
 import subprocess
-import shutil
 import argparse
 import re
-import glob
 
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PHISHING_JSON = os.path.join(BASE_DIR, "phising.json")
 WEB_CRAWLER = os.path.join(BASE_DIR, "collect", "web_crawler.py")
 CLASSIFY_SCRIPT = os.path.join(BASE_DIR, "hasher", "classify_web.py")
 UIHASH_SCRIPT = os.path.join(BASE_DIR, "hasher", "uihash.py")
 COMPARE_SCRIPT = os.path.join(BASE_DIR, "hasher", "compare_siamese.py")
-
 MODEL_PATH = os.path.join(BASE_DIR, "models", "siamese_e30_32_5x10.tar")
-EVAL_OUTPUT_DIR = os.path.join(BASE_DIR, "eval_output")
-CACHE_DIR = os.path.join(EVAL_OUTPUT_DIR, "cache_legit")
 
 PYTHON_EXE = sys.executable
 
 def run_command(cmd, cwd=None):
-    """Run a command only if safe. This script is intended for the USER to run."""
-    print(f"Running command: {' '.join(cmd)}")
+    """Run a command via subprocess."""
+    print(f"Running: {' '.join(cmd)}")
     subprocess.check_call(cmd, cwd=cwd)
 
-def get_latest_dir(parent_dir):
-    """Get the most recently created subdirectory in parent_dir."""
-    dirs = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, d))]
-    if not dirs:
-        return None
-    return max(dirs, key=os.path.getmtime)
-
-def evaluate(start_index=0, max_count=None):
-    if not os.path.exists(PHISHING_JSON):
-        print(f"Error: {PHISHING_JSON} not found.")
+def evaluate(input_file, output_dir, start_index=0, max_count=None):
+    """
+    Evaluate phishing pairs with simplified folder structure.
+    
+    Folder structure:
+    output_dir/
+    ├── legit/
+    │   └── {domain_timestamp}/
+    ├── phish/
+    │   └── {domain_timestamp}/
+    ├── hash_10x5x8.npy
+    ├── name_10x5x8.npy
+    └── results.csv
+    """
+    if not os.path.exists(input_file):
+        print(f"Error: {input_file} not found.")
         return
 
     # Load JSON data
-    with open(PHISHING_JSON, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Error loading JSON {input_file}: {e}")
+        return
 
-    # Prepare Directories
-    if not os.path.exists(EVAL_OUTPUT_DIR):
-        os.makedirs(EVAL_OUTPUT_DIR)
-    if not os.path.exists(CACHE_DIR):
-        os.makedirs(CACHE_DIR)
+    # Prepare output directory
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     
-    results_csv = os.path.join(EVAL_OUTPUT_DIR, "results.csv")
-    # Always append, but if creating new, write header
+    results_csv = os.path.join(output_dir, "results.csv")
+    
+    # Write CSV header if new
     if not os.path.exists(results_csv):
         with open(results_csv, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
-            # Added Verdict column
-            writer.writerow(["Target", "Legitimate_URL", "Phishing_URL", "Score", "Distance", "Verdict", "Legit_Path", "Phish_Path"])
+            writer.writerow(["Target", "Legitimate_URL", "Phishing_URL", "Best_Score", "Best_Distance", "Legit_File", "Phish_File"])
 
-    legit_cache = {}
     processed_count = 0
+    legit_cache = {}  # Cache for legitimate site crawls: {url: legit_dir_path}
     
-    # Target Threshold for Verdict
-    TARGET_THRESHOLD = 0.8
-    TARGET_MAX_DIST = 3.0
-
     for i, entry in enumerate(data):
         if i < start_index:
             continue
@@ -80,172 +78,189 @@ def evaluate(start_index=0, max_count=None):
         if not legit_url:
             continue
 
-        # --- 1. PREP LEGIT SITE ---
-        legit_path_source = None
-        
-        if legit_url in legit_cache and os.path.exists(legit_cache[legit_url]):
-            print(f"Using cached legitimate site for {legit_url}")
-            legit_path_source = legit_cache[legit_url]
-        else:
-            print(f"Crawling Legitimate URL: {legit_url}")
-            existing_dirs = set(os.listdir(CACHE_DIR))
-            try:
-                run_command([PYTHON_EXE, WEB_CRAWLER, legit_url, "--output", CACHE_DIR, "--headless", "--pages", "10", "--scrolls", "3"])
-            except subprocess.CalledProcessError:
-                print("Failed to crawl legitimate URL.")
-                continue
-
-            new_dirs = set(os.listdir(CACHE_DIR)) - existing_dirs
-            if new_dirs:
-                created_dir_name = list(new_dirs)[0]
-                legit_path_source = os.path.join(CACHE_DIR, created_dir_name)
-                legit_cache[legit_url] = legit_path_source
-            else:
-                legit_path_source = get_latest_dir(CACHE_DIR)
-                if legit_path_source:
-                     legit_cache[legit_url] = legit_path_source
-
-        if not legit_path_source:
-            print("Error: Could not determine legitimate site folder.")
-            continue
-
-        # --- PROCESS PHISHING PAIRS ---
+        # Process each phishing URL
         for j, phish_url in enumerate(phish_urls):
             print(f"\n{'='*60}")
-            print(f"Processing Pair {i}-{j}: {target}")
+            print(f"Processing: {target} (Legitimate vs Phishing #{j+1})")
+            print(f"  Legitimate: {legit_url}")
+            print(f"  Phishing #{j+1}: {phish_url}")
             print(f"{'='*60}")
             
-            pair_id = f"{i}_{j}_{target.replace(' ', '_').replace('/', '_')}"
-            pair_dir = os.path.join(EVAL_OUTPUT_DIR, pair_id)
+            # Create pair-specific output directory with clear naming
+            # Format: {target}_vs_phish{index}
+            safe_target = target.replace(' ', '_').replace('/', '_').replace('\\', '_')
+            pair_name = f"{safe_target}_vs_phish{j+1}"
+            pair_output = os.path.join(output_dir, pair_name)
             
-            if os.path.exists(pair_dir):
-                shutil.rmtree(pair_dir)
-            os.makedirs(pair_dir)
+            if os.path.exists(pair_output):
+                import shutil
+                shutil.rmtree(pair_output)
+            os.makedirs(pair_output)
+            
+            legit_dir = os.path.join(pair_output, "legit")
+            phish_dir = os.path.join(pair_output, "phish")
+            os.makedirs(legit_dir)
+            os.makedirs(phish_dir)
 
             try:
-                # Copy Legit
-                legit_folder_name = os.path.basename(legit_path_source)
-                shutil.copytree(legit_path_source, os.path.join(pair_dir, legit_folder_name))
+                # 1. Crawl or Copy Legitimate Site
+                if legit_url in legit_cache:
+                    # Use cached legitimate site data
+                    print(f"\n>>> Using cached legitimate site data from: {legit_cache[legit_url]}")
+                    import shutil
+                    cached_legit_dir = legit_cache[legit_url]
+                    
+                    # Copy all files from cached directory to new legit directory
+                    for item in os.listdir(cached_legit_dir):
+                        src = os.path.join(cached_legit_dir, item)
+                        dst = os.path.join(legit_dir, item)
+                        if os.path.isfile(src):
+                            shutil.copy2(src, dst)
+                        elif os.path.isdir(src):
+                            shutil.copytree(src, dst)
+                    
+                    print(f"  Copied {len(os.listdir(legit_dir))} items from cache")
+                else:
+                    # Crawl legitimate site for the first time
+                    print("\n>>> Crawling Legitimate Site...")
+                    run_command([
+                        PYTHON_EXE, WEB_CRAWLER, legit_url,
+                        "--output", legit_dir,
+                        "--headless",
+                        "--pages", "10",
+                        "--scrolls", "3",
+                        "--login-priority"
+                    ])
+                    
+                    # Cache the legitimate site directory
+                    legit_cache[legit_url] = legit_dir
+                    print(f"  Cached legitimate site data for: {legit_url}")
                 
-                # Crawl Phish
-                print(">>> Crawling Phishing URL...")
-                run_command([PYTHON_EXE, WEB_CRAWLER, phish_url, "--output", pair_dir, "--headless", "--pages", "10", "--scrolls", "3"])
+                # 2. Crawl Phishing Site
+                print("\n>>> Crawling Phishing Site...")
+                run_command([
+                    PYTHON_EXE, WEB_CRAWLER, phish_url,
+                    "--output", phish_dir,
+                    "--headless",
+                    "--pages", "10",
+                    "--scrolls", "3",
+                    "--login-priority"
+                ])
 
-                subdirs = [os.path.join(pair_dir, d) for d in os.listdir(pair_dir) if os.path.isdir(os.path.join(pair_dir, d))]
-                if len(subdirs) < 2:
-                    print("Error: Failed to download both sites.")
+                # 3. Classify (run on pair_output, not individual folders)
+                print("\n>>> Classifying...")
+                run_command([PYTHON_EXE, CLASSIFY_SCRIPT, pair_output, "--tag-only"])
+
+                # 4. Generate Hashes (same as manual workflow)
+                print("\n>>> Generating Hashes...")
+                
+                # Run uihash on pair_output (parent of legit/ and phish/)
+                hash_output_dir = os.path.join(pair_output, "hash")
+                run_command([
+                    PYTHON_EXE, UIHASH_SCRIPT, pair_output, "dummy",
+                    "--output_path", hash_output_dir,
+                    "--num_classes", "8",
+                    "--grid_size", "10,5"
+                ])
+                
+                # Check if hash files exist
+                hash_path = os.path.join(hash_output_dir, "hash_10x5x8.npy")
+                name_path = os.path.join(hash_output_dir, "name_10x5x8.npy")
+                
+                if not os.path.exists(hash_path) or not os.path.exists(name_path):
+                    print("Error: Hash generation failed.")
                     with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
                         writer = csv.writer(csvfile)
-                        writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (Download Failed)", "", ""])
-                    continue
-
-                # Classify
-                print(">>> Classifying...")
-                run_command([PYTHON_EXE, CLASSIFY_SCRIPT, pair_dir, "--tag-only"])
-
-                # Hash
-                print(">>> Generating Hashes...")
-                run_command([PYTHON_EXE, UIHASH_SCRIPT, pair_dir, "dummy", "--output_path", pair_dir, "--num_classes", "8", "--grid_size", "10,5", "--naivexml", "--filter", "1"])
-                
-                hash_files = glob.glob(os.path.join(pair_dir, "hash*.npy"))
-                name_files = glob.glob(os.path.join(pair_dir, "name*.npy"))
-
-                if not hash_files:
-                    print("Error: Hash generation failed.")
+                        writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (Hash Failed)", "", ""])
                     continue
                 
-                hash_path = hash_files[0]
-                name_path = name_files[0]
+                # Verify hash is not empty
+                import numpy as np
+                h = np.load(hash_path, allow_pickle=True)
+                if len(h) == 0:
+                    print(f"Error: Hash is empty (shape: {h.shape})")
+                    with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
+                        writer = csv.writer(csvfile)
+                        writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (Empty Hash)", "", ""])
+                    continue
+                
+                print(f"  Hash files generated: {hash_path} (samples: {len(h)})")
 
-                # Compare
-                print(">>> Comparing...")
-                # NOTE: We use threshold -1.0 internally to force output of the best score even if low,
-                # so we can record it in the CSV. We will apply the user's criteria (0.8) for the "Verdict".
+                # 5. Compare (no threshold filtering)
+                print("\n>>> Comparing...")
                 cmd = [
-                    PYTHON_EXE, COMPARE_SCRIPT, 
-                    hash_path, name_path, MODEL_PATH, 
-                    "--hash_size", "8,10,5", 
-                    "--top", "50", 
-                    "--cross", 
-                    "--threshold", "-2.0" 
+                    PYTHON_EXE, COMPARE_SCRIPT,
+                    hash_path, name_path, MODEL_PATH,
+                    "--hash_size", "8,10,5",
+                    "--top", "100",  # Get more results to find best match
+                    "--cross",
+                    "--threshold", "-2.0"  # No threshold
                 ]
                 
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 print(result.stdout)
 
-                # --- Save Detailed Results to CSV (results_details.csv) ---
-                details_csv = os.path.join(EVAL_OUTPUT_DIR, "results_details.csv")
-                # Write header if new
-                if not os.path.exists(details_csv):
-                    with open(details_csv, 'w', newline='', encoding='utf-8') as f:
-                        writer = csv.writer(f)
-                        writer.writerow(["Target", "Legitimate_URL", "Phishing_URL", "Rank", "Score", "Distance", "File_A", "File_B"])
-
-                # Regex to parse multiple pairs
-                # Format:
-                # 1. Score: 1.0000 (Dist: 0.0000)
-                #    A: ...
-                #    B: ...
+                # Parse results and find best match
                 pattern = r"(\d+)\. Score: ([\d\.\-]+) \(Dist: ([\d\.\-]+)\)\s+A: (.+)\s+B: (.+)"
                 matches = re.findall(pattern, result.stdout)
 
-                if matches:
-                    with open(details_csv, 'a', newline='', encoding='utf-8') as f:
-                        writer = csv.writer(f)
-                        for m in matches:
-                            rank = m[0]
-                            sc = m[1]
-                            dst = m[2]
-                            file_a = m[3].strip()
-                            file_b = m[4].strip()
-                            writer.writerow([target, legit_url, phish_url, rank, sc, dst, file_a, file_b])
-                else:
-                    # If no matches found (e.g. threshold issue), maybe write one line indicating no results?
-                    # Or just skip. User wants details.
-                    pass
+                if not matches:
+                    print("WARNING: No comparison results found!")
+                    with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
+                        writer = csv.writer(csvfile)
+                        writer.writerow([target, legit_url, phish_url, "N/A", "N/A", "Error (No Results)", "", ""])
+                    continue
 
-                # Extract Score (Best Match for Summary)
-                score_str = "N/A"
-                dist_str = "N/A"
-                verdict = "Fail"
-
-                # Use the first match from regex if available
-                if matches:
-                    score_str = matches[0][1]
-                    dist_str = matches[0][2]
-                    try:
-                        sc = float(score_str)
-                        dst = float(dist_str)
-                        if sc >= TARGET_THRESHOLD and dst <= TARGET_MAX_DIST:
-                            verdict = "Match"
-                    except:
-                        pass
-                else:
-                    # Fallback regex for single if loop failed or format weird
-                    match_single = re.search(r"1\. Score: ([\d\.\-]+) \(Dist: ([\d\.\-]+)\)", result.stdout)
-                    if match_single:
-                        score_str = match_single.group(1)
-                        dist_str = match_single.group(2)
-
-                l_path = os.path.basename(subdirs[0])
-                p_path = os.path.basename(subdirs[1]) if len(subdirs) > 1 else ""
-
+                # Find best match: highest score, lowest distance
+                # Sort by score DESC, then distance ASC
+                best_match = sorted(matches, key=lambda x: (-float(x[1]), float(x[2])))[0]
+                
+                rank, score, distance, file_a, file_b = best_match
+                
+                # Save to CSV
                 with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
                     writer = csv.writer(csvfile)
-                    writer.writerow([target, legit_url, phish_url, score_str, dist_str, verdict, l_path, p_path])
+                    writer.writerow([
+                        target,
+                        legit_url,
+                        phish_url,
+                        score,
+                        distance,
+                        file_a.strip(),
+                        file_b.strip()
+                    ])
+                
+                print(f"\n✓ Best Match: Score={score}, Distance={distance}")
 
             except Exception as e:
                 print(f"Exception processing pair {i}-{j}: {e}")
                 import traceback
                 traceback.print_exc()
+                with open(results_csv, 'a', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow([target, legit_url, phish_url, "N/A", "N/A", f"Error ({str(e)})", "", ""])
         
         processed_count += 1
 
+    print(f"\n{'='*60}")
+    print(f"Evaluation Complete! Results saved to: {results_csv}")
+    print(f"{'='*60}")
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=int, default=0)
-    parser.add_argument("--count", type=int, default=None)
+    parser = argparse.ArgumentParser(description="Evaluate phishing pairs with simplified workflow")
+    parser.add_argument("input", nargs="?", default=os.path.join(BASE_DIR, "phising.json"),
+                        help="Input JSON file path (default: phising.json)")
+    parser.add_argument("--output", type=str, default=os.path.join(BASE_DIR, "eval_output"),
+                        help="Output directory (default: eval_output)")
+    parser.add_argument("--start", type=int, default=0, help="Start index")
+    parser.add_argument("--count", type=int, default=None, help="Max items to process")
     args = parser.parse_args()
 
-    print("Starting automated evaluation...")
-    evaluate(start_index=args.start, max_count=args.count)
+    # Convert to absolute paths
+    input_file = os.path.abspath(args.input)
+    output_dir = os.path.abspath(args.output)
+    
+    print(f"Input: {input_file}")
+    print(f"Output: {output_dir}")
+
+    evaluate(input_file=input_file, output_dir=output_dir, start_index=args.start, max_count=args.count)
