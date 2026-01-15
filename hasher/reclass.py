@@ -32,13 +32,13 @@ class ImgDataSet(Dataset):
     def __init__(self, root_path: str):
         npy_file = join(root_path, "imgdata.npy")
         self._class_names = listdir(root_path)
-        self._class_names = [i for i in self._class_names if not i.endswith('.npy')]
+        self._class_names = [i for i in self._class_names if not i.endswith('.npy') and not i.endswith('.npz')]
         if not exists(npy_file):
             print("generate dataset...")
             data = []
             for i, _class in enumerate(self._class_names):
                 print(_class)
-                sub_class = f'{root_path}\\{_class}'
+                sub_class = join(root_path, _class)
                 img_files = listdir(sub_class)
                 for img_file in img_files:
                     img = cv2.imread(join(sub_class, img_file))
@@ -129,8 +129,8 @@ class ImgClassifier:
             confidence_threshold (float): The confidence to take the
               predicted label
         """
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
+        # Force CPU to avoid CUDA mismatches
+        self.device = torch.device("cpu")
         print(f"DEVICE: {self.device}")
         self.epoch = epoch
         self.batch_size = batch_size

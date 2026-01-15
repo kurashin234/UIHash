@@ -1,0 +1,110 @@
+2026-01-13 14:01:49,457 - INFO - ====== WebDriver manager ======
+2026-01-13 14:01:50,497 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:01:50,724 - INFO - About to download new driver from https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
+2026-01-13 14:01:50,878 - INFO - Driver downloading response is 200
+2026-01-13 14:01:51,797 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:01:52,697 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:01:55,346 - INFO - Driver has been saved in cache [/root/.wdm/drivers/chromedriver/linux64/114.0.5735.90]
+2026-01-13 14:01:55,362 - ERROR - Failed to setup driver with webdriver_manager: Message: Service /root/.wdm/drivers/chromedriver/linux64/114.0.5735.90/chromedriver unexpectedly exited. Status code was: 127
+
+2026-01-13 14:08:22,091 - INFO - Initialized with 1 classes
+2026-01-13 14:08:47,785 - INFO - Initialized with 1 classes
+2026-01-13 14:08:47,924 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:09:58,538 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:09:58,671 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:10:25,216 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:10:25,351 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:11:03,352 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:11:03,479 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:11:03,516 - INFO - Loading siamese model from /root/Reserch/UIHash/models/siamese_e30_32_5x10.tar
+2026-01-13 14:12:04,659 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:12:04,774 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:12:04,844 - INFO - Loading siamese model from /root/Reserch/UIHash/models/siamese_e30_32_5x10.tar
+2026-01-13 14:12:04,863 - INFO - Processing Target: DHL
+2026-01-13 14:12:04,895 - WARNING - Failed to hash legit URL https://www.dhl.com
+2026-01-13 14:14:08,013 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:14:08,152 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:14:08,199 - INFO - Loading siamese model from /root/Reserch/UIHash/models/siamese_e30_32_5x10.tar
+2026-01-13 14:14:08,205 - INFO - Processing Target: DHL
+2026-01-13 14:14:08,216 - WARNING - Failed to hash legit URL https://www.dhl.com
+2026-01-13 14:14:43,868 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:14:43,980 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:14:44,020 - INFO - Loading siamese model from /root/Reserch/UIHash/models/siamese_e30_32_5x10.tar
+2026-01-13 14:14:44,026 - INFO - Processing Target: DHL
+2026-01-13 14:14:44,032 - WARNING - Failed to hash legit URL https://www.dhl.com
+2026-01-13 14:14:44,044 - INFO - Score https://trouduc.dhi-programmation.com/: 0.9901396632194519
+2026-01-13 14:14:44,059 - INFO - Score https://tafiole.dhi-programmation.com//: 0.99871826171875
+2026-01-13 14:14:44,062 - INFO - Score https://nassab.dhi-programmation.com/: 0.9170021414756775
+2026-01-13 14:14:44,070 - INFO - Score https://www.dhi-programmation.com/: 0.9718166589736938
+2026-01-13 14:14:44,073 - INFO - Score https://valentin.dhi-programmation.com/: 0.9701663255691528
+2026-01-13 14:14:44,075 - INFO - Score https://progression-bordereau.com/: 0.9253918528556824
+2026-01-13 14:14:44,080 - INFO - Score https://progression-bordereau.com/index.php: 0.6927441358566284
+2026-01-13 14:14:44,087 - INFO - Score https://tarlouse.dhi-collect.com/: 0.988764226436615
+2026-01-13 14:14:44,093 - INFO - Score https://tapinette.dhi-collect.com/: 0.995447039604187
+2026-01-13 14:14:44,098 - INFO - Score https://bordereau-contacte.com/: 0.9909267425537109
+2026-01-13 14:14:44,104 - INFO - Score https://comnassab.dhi-collect.com/: 0.8337170481681824
+2026-01-13 14:14:44,108 - INFO - Score https://bordereau-contacte.com/index.php: 0.8291226625442505
+2026-01-13 14:14:44,111 - INFO - Score https://wxramzqum.com%E2%88%95vKOKH%E2%88%95SDKWOM%E2%88%95liRJUI@lnilzch.cn/MtBQb-i/rewards/Gs1WTEAIpMoIm/EkgZH/account/shxbnzJ9/help/ksFSQmA4JX9Hec3/rib9EsIa/feedback/tUPSmMEAe3I/g0NHpE_/checkout/XI2jLMY6quWMn_?page=HtdL&amp;token=xMrMUQtnnxSdx9No&amp;user_agent=nvNZdFi613&amp;id=nDKtoq&amp;session=RM9fmkcpDG&amp;ref=e_Gk0XZ7: 0.9679854512214661
+2026-01-13 14:14:44,113 - INFO - Score https://laliche.dhi-collect.com/: 0.95111483335495
+2026-01-13 14:14:44,116 - INFO - Score https://roux.dhi-collect.com/: 0.8797677755355835
+2026-01-13 14:14:44,118 - INFO - Score https://porceillon.dhi-collect.com/: 0.9915530681610107
+2026-01-13 14:14:44,122 - INFO - Score https://corrine.dhi-collect.com/: 0.9955653548240662
+2026-01-13 14:14:44,127 - INFO - Score https://damour.dhi-collect.com/: 0.953799843788147
+2026-01-13 14:14:44,133 - INFO - Score https://enzo.dhi-collect.com/: 0.9802815318107605
+2026-01-13 14:14:44,137 - INFO - Score https://desire.dhi-collect.com/: 0.9890744686126709
+2026-01-13 14:14:44,144 - INFO - Score https://www.dhi-collect.com/: 0.9875884056091309
+2026-01-13 14:14:44,149 - INFO - Score https://trupel.dhi-collect.com/: 0.9874665141105652
+2026-01-13 14:14:44,151 - INFO - Score https://nassab.dhi-collect.com/: 0.9967977404594421
+2026-01-13 14:14:44,153 - INFO - Score https://trouduc.dhi-collect.com/: 0.9970565438270569
+2026-01-13 14:14:44,156 - INFO - Score https://noobs.dhi-collect.com/: 0.9978563189506531
+2026-01-13 14:14:44,159 - INFO - Score https://noobs.dhi-instructions.com/: 0.9947021007537842
+2026-01-13 14:14:44,162 - INFO - Score https://tf1.dhi-instructions.com/: 0.9789217710494995
+2026-01-13 14:14:44,167 - INFO - Score https://outtrabady.dhi-instructions.com/: 0.915221095085144
+2026-01-13 14:14:44,169 - INFO - Score https://casserat.dhi-instructions.com/: 0.9844094514846802
+2026-01-13 14:14:44,171 - INFO - Score https://loic.dhi-instructions.com/: 0.9959844946861267
+2026-01-13 14:14:44,175 - INFO - Score https://teddy.dhi-instructions.com/: 0.999014139175415
+2026-01-13 14:14:44,177 - INFO - Score https://programmation-bordereau.com/: 0.9929880499839783
+2026-01-13 14:14:44,179 - INFO - Score https://programmation-bordereau.com/index.php: 0.9709084630012512
+2026-01-13 14:14:44,181 - INFO - Score https://trackpishbeat1.com/: 0.9884488582611084
+2026-01-13 14:14:44,183 - INFO - Score https://trackpishbeat1.com/index.php: 0.9927116632461548
+2026-01-13 14:14:44,186 - INFO - Score https://yogisandyoginis.com/wp-content/zzdlls.htm#a@b.com: 0.9859015941619873
+2026-01-13 14:14:44,188 - INFO - Score https://acddja.com%E2%88%95qcLDzM%E2%88%95RtiILuLg%E2%88%95Tuowz@hhyfitk.cn/8m_A_JOY/details/zC6zS1ddunMNHm/e08St/user/G5ORkz6k-Ehx/ywyhtE/shipping/fazV6/offers/HsxkWJP/login/EfEDSq1s5Vpu?id=df49Mg&amp;locale=ja-JP&amp;token=zFP_Q6w7HWL3Cbdc&amp;page=K3zv&amp;user_agent=3m6ngQ597_&amp;category=wezOE: 0.984801709651947
+2026-01-13 14:14:44,190 - INFO - Score https://maison-orbey.de/wp-content/plugins/xleet/b/g/index2.php: 0.9626686573028564
+2026-01-13 14:14:44,192 - INFO - Score https://stroomvolgen.docsecure.co.za/: 0.9892863035202026
+2026-01-13 14:14:44,194 - INFO - Score https://stroomvolgen.docsecure.co.za/tracking/: 0.9984757900238037
+2026-01-13 14:14:44,196 - INFO - Score https://stroomvolgen.docsecure.co.za/tracking: 0.9952564239501953
+2026-01-13 14:14:44,198 - INFO - Score https://yogisandyoginis.com/wp-content/zzdlls.htm: 0.9948550462722778
+2026-01-13 14:14:44,200 - INFO - Score https://tko.swa.mybluehost.me/DHL-UK/: 0.998619556427002
+2026-01-13 14:14:44,203 - INFO - Score https://tko.swa.mybluehost.me/DHL-UK/track/track.php: 0.9940964579582214
+2026-01-13 14:14:44,209 - INFO - Score https://gla.ita.mybluehost.me/boy/: 0.9886850714683533
+2026-01-13 14:14:44,213 - INFO - Score https://did.li/4MLKDJDwebappsClienT?pZVS2KirQcqg2XvGoIxY0EAYbWt: 0.9899373650550842
+2026-01-13 14:14:44,216 - INFO - Score https://t.co/INx5eGxYjQ: 0.9576238393783569
+2026-01-13 14:14:44,223 - INFO - Score https://brasilcopy.com.br/config/dhl/index.php?i=i&amp;0=a@b.com: 0.9131254553794861
+2026-01-13 14:14:44,224 - INFO - Done. Results saved to output_test_mock_8/phishing_eval_results.csv
+2026-01-13 14:24:15,991 - INFO - Inferred 4 classes from checkpoint
+2026-01-13 14:24:16,143 - INFO - Loading reclass model from /root/Reserch/UIHash/models/reclass_e30_128.tar
+2026-01-13 14:24:16,183 - INFO - Loading siamese model from /root/Reserch/UIHash/models/siamese_e30_32_5x10.tar
+2026-01-13 14:24:16,197 - INFO - Processing Target: DHL
+2026-01-13 14:24:16,228 - WARNING - Failed to hash legit URL https://www.amazon.co.jp/
+2026-01-13 14:24:16,319 - INFO - Score https://www.amazon.com/: Cos=0.9743878245353699, Euc=1.1930534839630127
+2026-01-13 14:24:16,330 - INFO - Score https://www.rakuten.co.jp/: Cos=0.9116196632385254, Euc=2.6486330032348633
+2026-01-13 14:24:16,332 - INFO - Score https://www.google.com/?hl=ja: Cos=0.9428694248199463, Euc=1.929642677307129
+2026-01-13 14:24:16,333 - INFO - Done. Results saved to output_test_mock_9/phishing_eval_results.csv
+2026-01-13 14:24:57,423 - INFO - ====== WebDriver manager ======
+2026-01-13 14:24:58,623 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:24:58,832 - INFO - About to download new driver from https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
+2026-01-13 14:24:58,998 - INFO - Driver downloading response is 200
+2026-01-13 14:24:59,824 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:25:00,740 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:25:01,578 - INFO - Driver has been saved in cache [/root/.wdm/drivers/chromedriver/linux64/114.0.5735.90]
+2026-01-13 14:25:01,595 - ERROR - Failed to setup driver with webdriver_manager: Message: Service /root/.wdm/drivers/chromedriver/linux64/114.0.5735.90/chromedriver unexpectedly exited. Status code was: 127
+
+2026-01-13 14:27:50,245 - INFO - ====== WebDriver manager ======
+2026-01-13 14:27:50,997 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:27:51,187 - INFO - About to download new driver from https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
+2026-01-13 14:27:51,363 - INFO - Driver downloading response is 200
+2026-01-13 14:27:52,163 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:27:52,887 - INFO - Get LATEST chromedriver version for google-chrome
+2026-01-13 14:27:53,709 - INFO - Driver has been saved in cache [/root/.wdm/drivers/chromedriver/linux64/114.0.5735.90]
+2026-01-13 14:27:53,726 - ERROR - Failed to setup driver with webdriver_manager: Message: Service /root/.wdm/drivers/chromedriver/linux64/114.0.5735.90/chromedriver unexpectedly exited. Status code was: 127
+
