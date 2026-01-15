@@ -74,9 +74,10 @@ def compare_using_siamese(hash_file, name_file, model_path, hash_size_str="8,5,1
     # Parsing that from the filename is tricky.
     # Better to manually instantiate the Net and load state dict.
     
+    # Force CPU to avoid CUDA compatibility issues (GTX 1080 not supported by current PyTorch)
     device = torch.device("cpu")
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
+    print(f"Using device: {device}")
+
 
     # Determine architecture
     from mlalgos.network import SiameseNet
